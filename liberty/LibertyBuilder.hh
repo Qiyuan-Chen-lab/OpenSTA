@@ -78,8 +78,8 @@ public:
 				       LibertyPort *from_port,
 				       LibertyPort *to_port,
 				       LibertyPort *related_out,
-				       const RiseFall *from_rf,
-				       const TimingRole *role,
+				       RiseFall *from_rf,
+				       TimingRole *role,
 				       TimingArcAttrsPtr attrs);
   TimingArcSet *makeCombinationalArcs(LibertyCell *cell,
 				      LibertyPort *from_port,
@@ -89,14 +89,14 @@ public:
 				      TimingArcAttrsPtr attrs);
   TimingArcSet *makeClockTreePathArcs(LibertyCell *cell,
                                       LibertyPort *to_port,
-                                      const TimingRole *role,
+                                      TimingRole *role,
                                       const MinMax *min_max,
                                       TimingArcAttrsPtr attrs);
   TimingArcSet *makeMinPulseWidthArcs(LibertyCell *cell,
                                       LibertyPort *from_port,
                                       LibertyPort *to_port,
                                       LibertyPort *related_out,
-                                      const TimingRole *role,
+                                      TimingRole *role,
                                       TimingArcAttrsPtr attrs);
 
 protected:
@@ -122,21 +122,21 @@ protected:
   virtual TimingArcSet *makeTimingArcSet(LibertyCell *cell,
 					 LibertyPort *from,
 					 LibertyPort *to,
-					 const TimingRole *role,
+					 TimingRole *role,
 					 TimingArcAttrsPtr attrs);
   virtual TimingArcSet *makeTimingArcSet(LibertyCell *cell,
 					 LibertyPort *from,
 					 LibertyPort *to,
 					 LibertyPort *related_out,
-					 const TimingRole *role,
+					 TimingRole *role,
 					 TimingArcAttrsPtr attrs);
   virtual TimingArc *makeTimingArc(TimingArcSet *set,
-				   const Transition *from_rf,
-				   const Transition *to_rf,
+				   Transition *from_rf,
+				   Transition *to_rf,
 				   TimingModel *model);
   TimingArc *makeTimingArc(TimingArcSet *set,
-			   const RiseFall *from_rf,
-			   const RiseFall *to_rf,
+			   RiseFall *from_rf,
+			   RiseFall *to_rf,
 			   TimingModel *model);
   TimingArcSet *makeLatchDtoQArcs(LibertyCell *cell,
 				  LibertyPort *from_port,
@@ -146,12 +146,12 @@ protected:
   TimingArcSet *makeRegLatchArcs(LibertyCell *cell,
 				 LibertyPort *from_port,
 				 LibertyPort *to_port,
-				 const RiseFall *from_rf,
+				 RiseFall *from_rf,
 				 TimingArcAttrsPtr attrs);
   TimingArcSet *makePresetClrArcs(LibertyCell *cell,
 				  LibertyPort *from_port,
 				  LibertyPort *to_port,
-				  const RiseFall *to_rf,
+				  RiseFall *to_rf,
 				  TimingArcAttrsPtr attrs);
   TimingArcSet *makeTristateEnableArcs(LibertyCell *cell,
 				       LibertyPort *from_port,

@@ -35,7 +35,6 @@
 #include "Corner.hh"
 #include "DcalcAnalysisPt.hh"
 #include "GraphDelayCalc.hh"
-#include "Variables.hh"
 
 namespace sta {
 
@@ -56,7 +55,7 @@ DelayCalcBase::reduceParasitic(const Parasitic *parasitic_network,
   while (pin_iter->hasNext()) {
     const Pin *pin = pin_iter->next();
     if (network_->isDriver(pin)) {
-      for (const RiseFall *rf : RiseFall::range()) {
+      for (RiseFall *rf : RiseFall::range()) {
         for (const MinMax *min_max : min_max->range()) {
           if (corner == nullptr) {
             for (const Corner *corner1 : *corners_) {
@@ -168,8 +167,7 @@ DelayCalcBase::checkDelay(const Pin *check_pin,
     float from_slew1 = delayAsFloat(from_slew);
     float to_slew1 = delayAsFloat(to_slew);
     return model->checkDelay(pinPvt(check_pin, dcalc_ap), from_slew1, to_slew1,
-                             related_out_cap,
-                             variables_->pocvEnabled());
+                             related_out_cap, pocv_enabled_);
   }
   else
     return delay_zero;

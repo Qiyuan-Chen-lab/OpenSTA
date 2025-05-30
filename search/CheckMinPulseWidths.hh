@@ -27,7 +27,7 @@
 #include "SdcClass.hh"
 #include "SearchClass.hh"
 #include "StaState.hh"
-#include "Path.hh"
+#include "PathRef.hh"
 
 namespace sta {
 
@@ -75,11 +75,13 @@ public:
   Arrival width(const StaState *sta) const;
   float minWidth(const StaState *sta) const;
   Slack slack(const StaState *sta) const;
-  Path *openPath() { return open_path_; }
+  Path *openPath() { return &open_path_; }
   Corner *corner(const StaState *sta) const;
-  const Path *openPath() const { return open_path_; }
+  const Path *openPath() const { return &open_path_; }
   Arrival openArrival(const StaState *sta) const;
-  Path *closePath(const StaState *sta) const;
+  void closePath(const StaState *sta,
+		 // Return value.
+		 PathVertex &close) const;
   Arrival closeArrival(const StaState *sta) const;
   Arrival openDelay(const StaState *sta) const;
   Arrival closeDelay(const StaState *sta) const;
@@ -90,7 +92,7 @@ public:
 
 protected:
   // Open path of the pulse.
-  Path *open_path_;
+  PathRef open_path_;
 };
 
 class MinPulseWidthSlackLess

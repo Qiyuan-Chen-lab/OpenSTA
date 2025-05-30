@@ -535,10 +535,10 @@ Clock::isDivideByOneCombinational() const
 ////////////////////////////////////////////////////////////////
 
 ClockEdge::ClockEdge(Clock *clock,
-		     const RiseFall *rf) :
+		     RiseFall *rf) :
   clock_(clock),
   rf_(rf),
-  name_(stringPrint("%s %s", clock_->name(), rf_->to_string().c_str())),
+  name_(stringPrint("%s %s", clock_->name(), rf_->asString())),
   time_(0.0),
   index_(clock_->index() * RiseFall::index_count + rf_->index())
 {
@@ -671,7 +671,7 @@ InterClockUncertainty::removeUncertainty(const RiseFallBoth *src_rf,
 }
 
 const RiseFallMinMax *
-InterClockUncertainty::uncertainties(const RiseFall *src_rf) const
+InterClockUncertainty::uncertainties(RiseFall *src_rf) const
 {
   return &uncertainties_[src_rf->index()];
 }

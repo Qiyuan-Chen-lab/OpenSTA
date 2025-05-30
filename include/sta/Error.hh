@@ -48,7 +48,7 @@ public:
   virtual bool suppressed() const { return suppressed_; }
 
 private:
-  std::string msg_;
+  string msg_;
   bool suppressed_;
 };
 

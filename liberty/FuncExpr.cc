@@ -30,8 +30,6 @@
 
 namespace sta {
 
-using std::string;
-
 FuncExpr *
 FuncExpr::makePort(LibertyPort *port)
 {
@@ -195,29 +193,34 @@ FuncExpr::portTimingSense(const LibertyPort *port) const
   return TimingSense::unknown;
 }
 
-string
-FuncExpr::to_string() const
+const char *
+FuncExpr::asString() const
 {
-  return to_string(false);
+  return asString(false);
 }
 
-string
-FuncExpr::to_string(bool with_parens) const
+const char *
+FuncExpr::asString(bool with_parens) const
 {
   switch (op_) {
   case op_port:
     return port_->name();
   case op_not: {
-    string result = "!";
-    result += left_->to_string(true);
+    const char *left = left_->asString(true);
+    size_t left_length = strlen(left);
+    size_t length = left_length + 2;
+    char *result = makeTmpString(length);
+    char *ptr = result;
+    *ptr++ = '!';
+    strcpy(ptr, left);
     return result;
   }
   case op_or:
-    return to_string(with_parens, '+');
+    return asStringSubexpr(with_parens, '+');
   case op_and:
-    return to_string(with_parens, '*');
+    return asStringSubexpr(with_parens, '*');
   case op_xor:
-    return to_string(with_parens, '^');
+    return asStringSubexpr(with_parens, '^');
   case op_one:
     return "1";
   case op_zero:
@@ -227,19 +230,25 @@ FuncExpr::to_string(bool with_parens) const
   }
 }
 
-string
-FuncExpr::to_string(bool with_parens,
-                    char op) const
+const char *
+FuncExpr::asStringSubexpr(bool with_parens,
+			  char op) const
 {
-  string right = right_->to_string(true);
-  string result;
+  const char *left = left_->asString(true);
+  const char *right = right_->asString(true);
+  size_t length = strlen(left) + 1 + strlen(right) + 1;
   if (with_parens)
-    result += '(';
-  result += left_->to_string(true);
-  result += op;
-  result += right_->to_string(true);
+    length += 2;
+  char *result = makeTmpString(length);
+  char *r = result;
   if (with_parens)
-    result += ')';
+    *r++= '(';
+  stringAppend(r, left);
+  *r++ = op;
+  stringAppend(r, right);
+  if (with_parens)
+    *r++ = ')';
+  *r = '\0';
   return result;
 }
 

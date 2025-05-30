@@ -314,7 +314,7 @@ public:
   void setCouplingCapFactor(float factor);
 
 private:
-  std::string name_;
+  string name_;
   int index_;
   int index_max_;
   float coupling_cap_factor_;

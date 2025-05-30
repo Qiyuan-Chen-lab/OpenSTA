@@ -41,7 +41,7 @@ class SdfScanner : public SdfFlexLexer
 {
 public:
   SdfScanner(std::istream *stream,
-             const std::string &filename,
+             const string &filename,
              SdfReader *reader,
              Report *report);
   virtual ~SdfScanner() {}
@@ -57,10 +57,10 @@ public:
   using FlexLexer::yylex;
 
 private:
-  std::string filename_;
+  string filename_;
   SdfReader *reader_;
   Report *report_;
-  std::string token_;
+  string token_;
 };
 
 } // namespace

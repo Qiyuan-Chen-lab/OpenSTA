@@ -177,13 +177,6 @@ arrivals_clk(const RiseFall *rf,
   return arrivals;
 }
 
-float
-arrival(const MinMax *min_max)
-{
-  Sta *sta = Sta::sta();
-  return delayAsFloat(sta->vertexArrival(self, min_max));
-}
-
 StringSeq
 arrivals_clk_delays(const RiseFall *rf,
 		    Clock *clk,
@@ -323,8 +316,8 @@ Vertex *from() { return self->from(Sta::sta()->graph()); }
 Vertex *to() { return self->to(Sta::sta()->graph()); }
 Pin *from_pin() { return self->from(Sta::sta()->graph())->pin(); }
 Pin *to_pin() { return self->to(Sta::sta()->graph())->pin(); }
-const TimingRole *role() { return self->role(); }
-const char *sense() { return to_string(self->sense()); }
+TimingRole *role() { return self->role(); }
+const char *sense() { return timingSenseString(self->sense()); }
 TimingArcSeq &
 timing_arcs() { return self->timingArcSet()->arcs(); }
 bool is_disabled_loop() { return Sta::sta()->isDisabledLoop(self); }
@@ -341,7 +334,7 @@ bool is_disabled_bidirect_net_path()
 bool is_disabled_preset_clear()
 { return Sta::sta()->isDisabledPresetClr(self); }
 const char *
-sim_timing_sense(){return to_string(Sta::sta()->simTimingSense(self));}
+sim_timing_sense(){return timingSenseString(Sta::sta()->simTimingSense(self));}
 
 FloatSeq
 arc_delays(TimingArc *arc)
@@ -383,14 +376,14 @@ arc_delay(TimingArc *arc,
   return delayAsFloat(Sta::sta()->arcDelay(self, arc, dcalc_ap));
 }
 
-string
+const char *
 cond()
 {
   FuncExpr *cond = self->timingArcSet()->cond();
   if (cond)
-    return cond->to_string();
+    return cond->asString();
   else
-    return "";
+    return nullptr;
 }
 
 const char *
@@ -421,9 +414,7 @@ latch_d_to_q_en()
     const RiseFall *enable_rf;
     lib_cell->latchEnable(d_q_set, enable_port, enable_func, enable_rf);
     if (enable_port)
-      return stringPrintTmp("%s %s",
-                            enable_port->name(),
-                            enable_rf->to_string().c_str());
+      return stringPrintTmp("%s %s", enable_port->name(), enable_rf->asString());
   }
   return "";
 }

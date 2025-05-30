@@ -29,7 +29,7 @@
 #include "Transition.hh"
 #include "SdcClass.hh"
 #include "SearchClass.hh"
-#include "Path.hh"
+#include "PathRef.hh"
 
 namespace sta {
 
@@ -62,10 +62,10 @@ public:
       bool own_states,
       const StaState *sta);
   ~Tag();
-  std::string to_string(const StaState *sta) const;
-  std::string to_string(bool report_index,
-                        bool report_rf_min_max,
-                        const StaState *sta) const;
+  const char *asString(const StaState *sta) const;
+  const char *asString(bool report_index,
+		       bool report_rf_min_max,
+		       const StaState *sta) const;
   ClkInfo *clkInfo() const { return clk_info_; }
   bool isClock() const { return is_clk_; }
   const ClockEdge *clkEdge() const;
@@ -86,8 +86,7 @@ public:
   bool isFilter() const { return is_filter_; }
   bool isSegmentStart() const { return is_segment_start_; }
   size_t hash() const { return hash_; }
-  size_t matchHash(bool match_crpr_clk_pin,
-                   const StaState *sta) const;
+  size_t matchHash(bool match_crpr_clk_pin) const;
 
 protected:
   void findHash();
@@ -112,12 +111,8 @@ private:
 class TagLess
 {
 public:
-  TagLess(const StaState *sta);
   bool operator()(const Tag *tag1,
 		  const Tag *tag2) const;
-
-private:
-  const StaState *sta_;
 };
 
 class TagIndexLess
@@ -143,7 +138,7 @@ public:
 int
 tagCmp(const Tag *tag1,
        const Tag *tag2,
-       const StaState *sta);
+       bool cmp_rf);
 
 // Match tag clock edge, clock driver and exception states but not clk info.
 bool

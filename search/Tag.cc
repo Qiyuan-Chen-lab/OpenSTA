@@ -89,20 +89,20 @@ Tag::~Tag()
     delete states_;
 }
 
-std::string
-Tag::to_string(const StaState *sta) const
+const char *
+Tag::asString(const StaState *sta) const
 {
-  return to_string(true, true, sta);
+  return asString(true, true, sta);
 }
 
-std::string
-Tag::to_string(bool report_index,
-               bool report_rf_min_max,
-               const StaState *sta) const
+const char *
+Tag::asString(bool report_index,
+	      bool report_rf_min_max,
+	      const StaState *sta) const
 {
   const Network *network = sta->network();
   const Corners *corners = sta->corners();
-  std::string result;
+  string result;
 
   if (report_index)
     result += std::to_string(index_);
@@ -111,9 +111,9 @@ Tag::to_string(bool report_index,
     const RiseFall *rf = transition();
     PathAnalysisPt *path_ap = corners->findPathAnalysisPt(path_ap_index_);
     result += " ";
-    result += rf->to_string().c_str();
+    result += rf->asString();
     result += " ";
-    result += path_ap->pathMinMax()->to_string();
+    result += path_ap->pathMinMax()->asString();
     result += "/";
     result += std::to_string(path_ap_index_);
   }
@@ -148,10 +148,10 @@ Tag::to_string(bool report_index,
     result += network->pathName(clk_src);
   }
 
-  const Path *crpr_clk_path = clk_info_->crprClkPath(sta);
-  if (crpr_clk_path != nullptr) {
+  const PathVertex crpr_clk_path(clk_info_->crprClkPath(), sta);
+  if (!crpr_clk_path.isNull()) {
     result += " crpr_pin ";
-    result += network->pathName(crpr_clk_path->pin(sta));
+    result += network->pathName(crpr_clk_path.pin(sta));
   }
 
   if (input_delay_) {
@@ -178,7 +178,10 @@ Tag::to_string(bool report_index,
       }
     }
   }
-  return result;
+
+  char *tmp = makeTmpString(result.size() + 1);
+  strcpy(tmp, result.c_str());
+  return tmp;
 }
 
 const RiseFall *
@@ -277,43 +280,40 @@ Tag::findHash()
 }
 
 size_t
-Tag::matchHash(bool match_crpr_clk_pin,
-               const StaState *sta) const
+Tag::matchHash(bool match_crpr_clk_pin) const
 {
   if (match_crpr_clk_pin)
     // match_hash_ with crpr clk pin thrown in.
-    return hashSum(match_hash_, clk_info_->crprClkVertexId(sta));
+    return hashSum(match_hash_, clk_info_->crprClkVertexId());
   else
     return match_hash_;
 }
 
 ////////////////////////////////////////////////////////////////
 
-TagLess::TagLess(const StaState *sta) :
-  sta_(sta)
-{
-}
-
 bool
 TagLess::operator()(const Tag *tag1,
 		    const Tag *tag2) const
 {
-  return tagCmp(tag1, tag2, sta_) < 0;
+  return tagCmp(tag1, tag2, true) < 0;
 }
 
 int
 tagCmp(const Tag *tag1,
        const Tag *tag2,
-       const StaState *sta)
+       bool cmp_rf)
 {
   if (tag1 == tag2)
     return 0;
 
-  ClkInfo *clk_info1 = tag1->clkInfo();
-  ClkInfo *clk_info2 = tag2->clkInfo();
-  int clk_cmp = clkInfoCmp(clk_info1, clk_info2, sta);
-  if (clk_cmp != 0)
-    return clk_cmp;
+  if (cmp_rf) {
+    int rf_index1 = tag1->rfIndex();
+    int rf_index2 = tag2->rfIndex();
+    if (rf_index1 < rf_index2)
+      return -1;
+    if (rf_index1 > rf_index2)
+      return 1;
+  }
 
   PathAPIndex path_ap_index1 = tag1->pathAPIndex();
   PathAPIndex path_ap_index2 = tag2->pathAPIndex();
@@ -322,11 +322,11 @@ tagCmp(const Tag *tag1,
   if (path_ap_index1 > path_ap_index2)
     return 1;
 
-  int rf_index1 = tag1->rfIndex();
-  int rf_index2 = tag2->rfIndex();
-  if (rf_index1 < rf_index2)
+  size_t clk_info1 = tag1->clkInfo()->hash();
+  size_t clk_info2 = tag2->clkInfo()->hash();
+  if (clk_info1 < clk_info2)
     return -1;
-  if (rf_index1 > rf_index2)
+  if (clk_info1 > clk_info2)
     return 1;
 
   bool is_clk1 = tag1->isClock();
@@ -420,8 +420,8 @@ tagMatch(const Tag *tag1,
 	&& tag1->isSegmentStart() == tag2->isSegmentStart()
 	&& clk_info1->isGenClkSrcPath() == clk_info2->isGenClkSrcPath()
 	&& (!match_crpr_clk_pin
-	    || !sta->crprActive()
-	    || clk_info1->crprClkVertexId(sta) == clk_info2->crprClkVertexId(sta))
+	    || !sta->sdc()->crprActive()
+	    || clk_info1->crprClkVertexId() == clk_info2->crprClkVertexId())
 	&& tagStateEqual(tag1, tag2));
 }
 
@@ -481,9 +481,9 @@ tagMatchCmp(const Tag *tag1,
     return 1;
 
   if (match_crpr_clk_pin
-      && sta->crprActive()) {
-    VertexId crpr_vertex1 = clk_info1->crprClkVertexId(sta);
-    VertexId crpr_vertex2 = clk_info2->crprClkVertexId(sta);
+      && sta->sdc()->crprActive()) {
+    VertexId crpr_vertex1 = clk_info1->crprClkVertexId();
+    VertexId crpr_vertex2 = clk_info2->crprClkVertexId();
     if (crpr_vertex1 < crpr_vertex2)
       return -1;
     if (crpr_vertex1 > crpr_vertex2)
@@ -676,7 +676,7 @@ TagMatchHash::TagMatchHash(bool match_crpr_clk_pin,
 size_t
 TagMatchHash::operator()(const Tag *tag) const
 {
-  return tag->matchHash(match_crpr_clk_pin_, sta_);
+  return tag->matchHash(match_crpr_clk_pin_);
 }
 
 TagMatchEqual::TagMatchEqual(bool match_crpr_clk_pin,

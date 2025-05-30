@@ -32,7 +32,7 @@
 #include "Transition.hh"
 #include "SearchClass.hh"
 #include "SearchPred.hh"
-#include "Path.hh"
+#include "PathVertex.hh"
 
 namespace sta {
 

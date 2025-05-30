@@ -37,7 +37,7 @@
 #include "Corner.hh"
 #include "PathEnd.hh"
 #include "PathExpanded.hh"
-#include "Path.hh"
+#include "PathRef.hh"
 #include "power/Power.hh"
 #include "Sta.hh"
 
@@ -318,9 +318,9 @@ PropertyValue::PropertyValue(ClockSet *value) :
   }
 }
 
-PropertyValue::PropertyValue(ConstPathSeq *value) :
-  type_(type_paths),
-  paths_(new ConstPathSeq(*value)),
+PropertyValue::PropertyValue(PathRefSeq *value) :
+  type_(type_path_refs),
+  path_refs_(new PathRefSeq(*value)),
   unit_(nullptr)
 {
 }
@@ -384,8 +384,8 @@ PropertyValue::PropertyValue(const PropertyValue &value) :
   case Type::type_clks:
     clks_ = value.clks_ ? new ClockSeq(*value.clks_) : nullptr;
     break;
-  case Type::type_paths:
-    paths_ = value.paths_ ? new ConstPathSeq(*value.paths_) : nullptr;
+  case Type::type_path_refs:
+    path_refs_ = value.path_refs_ ? new PathRefSeq(*value.path_refs_) : nullptr;
     break;
   case Type::type_pwr_activity:
     pwr_activity_ = value.pwr_activity_;
@@ -450,8 +450,8 @@ PropertyValue::PropertyValue(PropertyValue &&value) :
     // Steal the value.
     value.clks_ = nullptr;
     break;
-  case Type::type_paths:
-    paths_ = value.paths_;
+  case Type::type_path_refs:
+    path_refs_ = value.path_refs_;
     // Steal the value.
     value.clks_ = nullptr;
     break;
@@ -473,8 +473,8 @@ PropertyValue::~PropertyValue()
   case Type::type_pins:
     delete pins_;
     break;
-  case Type::type_paths:
-    delete paths_;
+  case Type::type_path_refs:
+    delete path_refs_;
     break;
   default:
     break;
@@ -535,8 +535,8 @@ PropertyValue::operator=(const PropertyValue &value)
   case Type::type_clks:
     clks_ = value.clks_ ? new ClockSeq(*value.clks_) : nullptr;
     break;
-  case Type::type_paths:
-    paths_ = value.paths_ ? new ConstPathSeq(*value.paths_) : nullptr;
+  case Type::type_path_refs:
+    path_refs_ = value.path_refs_ ? new PathRefSeq(*value.path_refs_) : nullptr;
     break;
   case Type::type_pwr_activity:
     pwr_activity_ = value.pwr_activity_;
@@ -602,8 +602,8 @@ PropertyValue::operator=(PropertyValue &&value)
     clks_ = value.clks_;
     value.clks_ = nullptr;
     break;
-  case Type::type_paths:
-    paths_ = value.paths_;
+  case Type::type_path_refs:
+    path_refs_ = value.path_refs_;
     value.clks_ = nullptr;
     break;
   case Type::type_pwr_activity:
@@ -613,8 +613,8 @@ PropertyValue::operator=(PropertyValue &&value)
   return *this;
 }
 
-string
-PropertyValue::to_string(const Network *network) const
+const char *
+PropertyValue::asString(const Network *network) const
 {
   switch (type_) {
   case Type::type_string:
@@ -650,11 +650,11 @@ PropertyValue::to_string(const Network *network) const
   case Type::type_none:
   case Type::type_pins:
   case Type::type_clks:
-  case Type::type_paths:
+  case Type::type_path_refs:
   case Type::type_pwr_activity:
-    return "";
+    return nullptr;
   }
-  return "";
+  return nullptr;
 }
 
 const char *
@@ -1147,7 +1147,12 @@ getProperty(Edge *edge,
 	    Sta *sta)
 {
   if (stringEqual(property, "full_name")) {
-    string full_name = edge->to_string(sta);
+    Network *network = sta->cmdNetwork();
+    Graph *graph = sta->ensureGraph();
+    const char *from = edge->from(graph)->name(network);
+    const char *to = edge->to(graph)->name(network);
+    string full_name;
+    stringPrint(full_name, "%s -> %s", from, to);
     return PropertyValue(full_name);
   }
   if (stringEqual(property, "delay_min_fall"))
@@ -1159,7 +1164,7 @@ getProperty(Edge *edge,
   else if (stringEqual(property, "delay_max_rise"))
     return edgeDelayProperty(edge, RiseFall::rise(), MinMax::max(), sta);
   else if (stringEqual(property, "sense"))
-    return PropertyValue(to_string(edge->sense()));
+    return PropertyValue(timingSenseString(edge->sense()));
   else if (stringEqual(property, "from_pin"))
     return PropertyValue(edge->from(sta->graph())->pin());
   else if (stringEqual(property, "to_pin"))
@@ -1178,7 +1183,7 @@ edgeDelayProperty(Edge *edge,
   bool delay_exists = false;
   TimingArcSet *arc_set = edge->timingArcSet();
   for (TimingArc *arc : arc_set->arcs()) {
-    const RiseFall *to_rf = arc->toEdge()->asRiseFall();
+    RiseFall *to_rf = arc->toEdge()->asRiseFall();
     if (to_rf == rf) {
       for (const Corner *corner : *sta->corners()) {
 	DcalcAnalysisPt *dcalc_ap = corner->findDcalcAnalysisPt(min_max);
@@ -1266,10 +1271,10 @@ getProperty(PathEnd *end,
     return PropertyValue(delayPropertyValue(end->slack(sta), sta));
   else if (stringEqual(property, "points")) {
     PathExpanded expanded(end->path(), sta);
-    ConstPathSeq paths;
+    PathRefSeq paths;
     for (size_t i = expanded.startIndex(); i < expanded.size(); i++) {
-      const Path *path = expanded.path(i);
-      paths.push_back(path);
+      const PathRef *path = expanded.path(i);
+      paths.push_back(*path);
     }
     return PropertyValue(&paths);
   }
@@ -1278,16 +1283,16 @@ getProperty(PathEnd *end,
 }
 
 PropertyValue
-getProperty(Path *path,
+getProperty(PathRef *path,
 	    const char *property,
 	    Sta *sta)
 {
   if (stringEqual(property, "pin"))
     return PropertyValue(path->pin(sta));
   else if (stringEqual(property, "arrival"))
-    return PropertyValue(delayPropertyValue(path->arrival(), sta));
+    return PropertyValue(delayPropertyValue(path->arrival(sta), sta));
   else if (stringEqual(property, "required"))
-    return PropertyValue(delayPropertyValue(path->required(), sta));
+    return PropertyValue(delayPropertyValue(path->required(sta), sta));
   else if (stringEqual(property, "slack"))
     return PropertyValue(delayPropertyValue(path->slack(sta), sta));
   else

@@ -29,7 +29,9 @@
 
 namespace sta {
 
-typedef std::map<const Pin*, FloatSeq, PinIdLess> WatchPinValuesMap;
+using std::vector;
+
+typedef map<const Pin*, FloatSeq, PinIdLess> WatchPinValuesMap;
 
 ArcDelayCalc *
 makeCcsCeffDelayCalc(StaState *sta);
@@ -66,7 +68,7 @@ public:
   Waveform watchWaveform(const Pin *pin) override;
 
 protected:
-  typedef std::vector<double> Region;
+  typedef vector<double> Region;
 
   void gateDelaySlew(const LibertyLibrary *drvr_library,
                      const RiseFall *rf,

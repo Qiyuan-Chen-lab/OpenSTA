@@ -144,14 +144,14 @@ Corners::makeParasiticAnalysisPts(bool per_corner)
     parasitic_analysis_pts_.resize(corners_.size() * MinMax::index_count);
     for (Corner *corner : corners_) {
       corner->setParasiticAnalysisPtcount(MinMax::index_count);
-      for (const MinMax *min_max : MinMax::range()) {
+      for (MinMax *min_max : MinMax::range()) {
         int mm_index = min_max->index();
         int ap_index = corner->index() * MinMax::index_count + mm_index;
         int ap_index_max = corner->index() * MinMax::index_count
           + MinMax::max()->index();
-        std::string ap_name = corner->name();
+        string ap_name = corner->name();
         ap_name += "_";
-        ap_name += min_max->to_string();
+        ap_name += min_max->asString();
         ParasiticAnalysisPt *ap = new ParasiticAnalysisPt(ap_name.c_str(),
                                                           ap_index, ap_index_max);
         parasitic_analysis_pts_[ap_index] = ap;
@@ -163,10 +163,10 @@ Corners::makeParasiticAnalysisPts(bool per_corner)
     // shared corner, per min/max
     parasitic_analysis_pts_.resize(MinMax::index_count);
     int ap_index_max = MinMax::max()->index();
-    for (const MinMax *min_max : MinMax::range()) {
+    for (MinMax *min_max : MinMax::range()) {
       int mm_index = min_max->index();
       int ap_index = mm_index;
-      ParasiticAnalysisPt *ap = new ParasiticAnalysisPt(min_max->to_string().c_str(),
+      ParasiticAnalysisPt *ap = new ParasiticAnalysisPt(min_max->asString(),
 							ap_index,
                                                         ap_index_max);
       parasitic_analysis_pts_[ap_index] = ap;
@@ -360,10 +360,15 @@ Corners::findPathAnalysisPt(PathAPIndex path_index) const
 
 Corner::Corner(const char *name,
 	       int index) :
-  name_(name),
+  name_(stringCopy(name)),
   index_(index),
   path_analysis_pts_(MinMax::index_count)
 {
+}
+
+Corner::~Corner()
+{
+  stringDelete(name_);
 }
 
 ParasiticAnalysisPt *

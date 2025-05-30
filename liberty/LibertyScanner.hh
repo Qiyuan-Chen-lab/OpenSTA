@@ -61,13 +61,13 @@ private:
   void error(const char *msg);
 
   std::istream *stream_;
-  std::string filename_;
+  string filename_;
   LibertyParser *reader_;
   Report *report_;
-  std::string token_;
+  string token_;
 
   // Previous lex state for include files.
-  std::string filename_prev_;
+  string filename_prev_;
   std::istream *stream_prev_;
 };
 

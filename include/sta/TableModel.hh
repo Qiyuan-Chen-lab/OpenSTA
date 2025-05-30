@@ -35,6 +35,8 @@
 
 namespace sta {
 
+using std::string;
+
 class Unit;
 class Units;
 class Report;
@@ -481,7 +483,7 @@ public:
   ~ReceiverModel();
   void setCapacitanceModel(TableModel *table_model,
                            size_t segment,
-                           const RiseFall *rf);
+                           RiseFall *rf);
   static bool checkAxes(TablePtr table);
 
 private:
@@ -574,13 +576,14 @@ private:
 class DriverWaveform
 {
 public:
-  DriverWaveform(const string &name,
+  DriverWaveform(const char *name,
                  TablePtr waveforms);
-  const char *name() const { return name_.c_str(); }
+  ~DriverWaveform();
+  const char *name() const { return name_; }
   Table1 waveform(float slew);
 
 private:
-  string name_;
+  const char *name_;
   TablePtr waveforms_;
 };
 

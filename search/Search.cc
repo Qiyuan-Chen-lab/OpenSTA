@@ -54,7 +54,9 @@
 #include "Bfs.hh"
 #include "Corner.hh"
 #include "Sim.hh"
-#include "Path.hh"
+#include "PathVertex.hh"
+#include "PathPrev.hh"
+#include "PathRef.hh"
 #include "ClkInfo.hh"
 #include "Tag.hh"
 #include "TagGroup.hh"
@@ -67,7 +69,6 @@
 #include "Latches.hh"
 #include "Crpr.hh"
 #include "Genclks.hh"
-#include "Variables.hh"
 
 namespace sta {
 
@@ -92,9 +93,10 @@ EvalPred::setSearchThruLatches(bool thru_latches)
 bool
 EvalPred::searchThru(Edge *edge)
 {
-  const TimingRole *role = edge->role();
+  const Sdc *sdc = sta_->sdc();
+  TimingRole *role = edge->role();
   return SearchPred0::searchThru(edge)
-    && (sta_->variables()->dynamicLoopBreaking()
+    && (sdc->dynamicLoopBreaking()
 	|| !edge->isDisabledLoop())
     && !role->isTimingCheck()
     && (search_thru_latches_
@@ -121,12 +123,12 @@ DynLoopSrchPred::DynLoopSrchPred(TagGroupBldr *tag_bldr) :
 
 bool
 DynLoopSrchPred::loopEnabled(Edge *edge,
-			     bool dynamic_loop_breaking_enabled,
+			     const Sdc *sdc,
 			     const Graph *graph,
 			     Search *search)
 {
   return !edge->isDisabledLoop()
-    || (dynamic_loop_breaking_enabled
+    || (sdc->dynamicLoopBreaking()
 	&& hasPendingLoopPaths(edge, graph, search));
 }
 
@@ -140,7 +142,11 @@ DynLoopSrchPred::hasPendingLoopPaths(Edge *edge,
     Corners *corners = search->corners();
     Vertex *from_vertex = edge->from(graph);
     TagGroup *prev_tag_group = search->tagGroup(from_vertex);
-    for (auto const [from_tag, path_index] : tag_bldr_->pathIndexMap()) {
+    ArrivalMap::Iterator arrival_iter(tag_bldr_->arrivalMap());
+    while (arrival_iter.hasNext()) {
+      Tag *from_tag;
+      int arrival_index;
+      arrival_iter.next(from_tag, arrival_index);
       if (from_tag->isLoop()) {
 	// Loop false path exceptions apply to rise/fall edges so to_rf
 	// does not matter.
@@ -179,14 +185,14 @@ bool
 SearchThru::searchThru(Edge *edge)
 {
   const Graph *graph = sta_->graph();
+  const Sdc *sdc = sta_->sdc();
   Search *search = sta_->search();
   return EvalPred::searchThru(edge)
     // Only search thru latch D->Q if it is always open.
     // Enqueue thru latches is handled explicitly by search.
     && (edge->role() != TimingRole::latchDtoQ()
 	|| sta_->latches()->latchDtoQState(edge) == LatchEnableState::open)
-    && loopEnabled(edge, sta_->variables()->dynamicLoopBreaking(),
-                   graph, search);
+    && loopEnabled(edge, sdc, graph, search);
 }
 
 ClkArrivalSearchPred::ClkArrivalSearchPred(const StaState *sta) :
@@ -249,6 +255,7 @@ Search::init(StaState *sta)
   path_groups_ = nullptr;
   endpoints_ = nullptr;
   invalid_endpoints_ = nullptr;
+  always_save_prev_paths_ = true;
   filter_ = nullptr;
   filter_from_ = nullptr;
   filter_to_ = nullptr;
@@ -267,7 +274,6 @@ Search::initVars()
 
 Search::~Search()
 {
-  deletePathGroups();
   deletePaths();
   deleteTags();
   delete tag_set_;
@@ -293,6 +299,7 @@ Search::~Search()
   delete genclks_;
   delete filtered_arrivals_;
   deleteFilter();
+  deletePathGroups();
 }
 
 void
@@ -426,8 +433,6 @@ Search::deletePathsIncr(Vertex *vertex)
 void
 Search::deletePaths(Vertex *vertex)
 {
-  debugPrint(debug_, "search", 4, "delete paths %s",
-             vertex->name(network_));
   TagGroup *tag_group = tagGroup(vertex);
   if (tag_group)
     graph_->deletePaths(vertex);
@@ -445,8 +450,8 @@ Search::findPathEnds(ExceptionFrom *from,
 		     bool unconstrained,
 		     const Corner *corner,
 		     const MinMaxAll *min_max,
-		     size_t group_path_count,
-		     size_t endpoint_path_count,
+		     int group_path_count,
+		     int endpoint_path_count,
 		     bool unique_pins,
 		     float slack_min,
 		     float slack_max,
@@ -460,9 +465,9 @@ Search::findPathEnds(ExceptionFrom *from,
 		     bool clk_gating_hold)
 {
   findFilteredArrivals(from, thrus, to, unconstrained, true);
-  if (!variables_->recoveryRemovalChecksEnabled())
+  if (!sdc_->recoveryRemovalChecksEnabled())
     recovery = removal = false;
-  if (!variables_->gatedClkChecksEnabled())
+  if (!sdc_->gatedClkChecksEnabled())
     clk_gating_setup = clk_gating_hold = false;
   makePathGroups(group_path_count, endpoint_path_count, unique_pins,
                  slack_min, slack_max,
@@ -485,6 +490,9 @@ Search::findFilteredArrivals(ExceptionFrom *from,
                              bool thru_latches)
 {
   unconstrained_paths_ = unconstrained;
+  // Delete results from last findPathEnds.
+  // Filtered arrivals are deleted by Sta::searchPreamble.
+  deletePathGroups();
   checkFromThrusTo(from, thrus, to);
   filter_from_ = from;
   filter_to_ = to;
@@ -536,7 +544,7 @@ Search::deleteFilteredArrivals()
         if (!filtered_arrivals_->empty()) {
           report_->reportLine("Filtered verticies mismatch");
           for (Vertex *vertex : *filtered_arrivals_)
-            report_->reportLine(" %s", vertex->to_string(this).c_str());
+            report_->reportLine(" %s", vertex->name(network_));
         }
       }
       filtered_arrivals_->clear();
@@ -610,7 +618,6 @@ Search::findFilteredArrivals(bool thru_latches)
     int arrival_count = arrival_iter_->visitParallel(max_level,
 						     arrival_visitor_);
     deleteTagsPrev();
-    genclks_->updateSrcPathPrevs();
     debugPrint(debug_, "search", 1, "found %d arrivals", arrival_count);
   }
   arrivals_exist_ = true;
@@ -718,20 +725,6 @@ Search::deleteVertexBefore(Vertex *vertex)
     invalid_endpoints_->erase(vertex);
 }
 
-void
-Search::deleteEdgeBefore(Edge *edge)
-{
-  Vertex *from = edge->from(graph_);
-  Vertex *to = edge->to(graph_);
-  arrivalInvalid(to);
-  requiredInvalid(from);
-  VertexPathIterator path_iter(to, graph_);
-  while (path_iter.hasNext()) {
-    Path *path = path_iter.next();
-    path->clearPrevPath(this);
-  }
-}
-
 bool
 Search::arrivalsValid()
 {
@@ -747,7 +740,6 @@ Search::arrivalsInvalid()
     // Delete paths to make sure no state is left over.
     // For example, set_disable_timing strands a vertex, which means
     // the search won't revisit it to clear the previous arrival.
-    deletePathGroups();
     deletePaths();
     deleteTags();
     genclks_->clear();
@@ -785,7 +777,7 @@ Search::arrivalInvalid(Vertex *vertex)
 {
   if (arrivals_exist_) {
     debugPrint(debug_, "search", 2, "arrival invalid %s",
-               vertex->to_string(this).c_str());
+               vertex->name(sdc_network_));
     if (!arrival_iter_->inQueue(vertex)) {
       // Lock for StaDelayCalcObserver called by delay calc threads.
       LockGuard lock(invalid_arrivals_lock_);
@@ -795,30 +787,14 @@ Search::arrivalInvalid(Vertex *vertex)
   }
 }
 
-// Move any pending arrival/requireds to invalid before relevelization.
-void
-Search::levelsChangedBefore()
-{
-  if (arrivals_exist_) {
-    while (arrival_iter_->hasNext()) {
-      Vertex *vertex = arrival_iter_->next();
-      arrivalInvalid(vertex);
-    }
-    while (required_iter_->hasNext()) {
-      Vertex *vertex = required_iter_->next();
-      requiredInvalid(vertex);
-    }
-  }
-}
-
 void
 Search::levelChangedBefore(Vertex *vertex)
 {
   if (arrivals_exist_) {
     arrival_iter_->remove(vertex);
     required_iter_->remove(vertex);
-    arrivalInvalid(vertex);
-    requiredInvalid(vertex);
+    search_->arrivalInvalid(vertex);
+    search_->requiredInvalid(vertex);
   }
 }
 
@@ -864,7 +840,7 @@ Search::requiredInvalid(Vertex *vertex)
 {
   if (requireds_exist_) {
     debugPrint(debug_, "search", 2, "required invalid %s",
-               vertex->to_string(this).c_str());
+               vertex->name(sdc_network_));
     if (!required_iter_->inQueue(vertex)) {
       // Lock for StaDelayCalcObserver called by delay calc threads.
       LockGuard lock(invalid_arrivals_lock_);
@@ -889,7 +865,6 @@ Search::findClkArrivals()
     arrival_visitor_->init(false, &search_clk);
     arrival_iter_->visitParallel(levelize_->maxLevel(), arrival_visitor_);
     deleteTagsPrev();
-    genclks_->updateSrcPathPrevs();
     arrivals_exist_ = true;
     stats.report("Find clk arrivals");
   }
@@ -1061,7 +1036,6 @@ Search::findArrivals1(Level level)
   Stats stats(debug_, report_);
   int arrival_count = arrival_iter_->visitParallel(level, arrival_visitor_);
   deleteTagsPrev();
-  genclks_->updateSrcPathPrevs();
   stats.report("Find arrivals");
   if (arrival_iter_->empty()
       && invalid_arrivals_->empty()) {
@@ -1069,7 +1043,7 @@ Search::findArrivals1(Level level)
     arrivals_at_endpoints_exist_ = true;
   }
   arrivals_exist_ = true;
-  debugPrint(debug_, "search", 1, "found %d arrivals", arrival_count);
+  debugPrint(debug_, "search", 1, "found %u arrivals", arrival_count);
 }
 
 void
@@ -1092,7 +1066,8 @@ Search::findArrivalsSeed()
 ////////////////////////////////////////////////////////////////
 
 ArrivalVisitor::ArrivalVisitor(const StaState *sta) :
-  PathVisitor(nullptr, sta)
+  PathVisitor(nullptr, sta),
+  always_save_prev_paths_(true)
 {
   init0();
   init(true);
@@ -1128,7 +1103,9 @@ ArrivalVisitor::init(bool always_to_endpoints,
 {
   always_to_endpoints_ = always_to_endpoints;
   pred_ = pred;
-  crpr_active_ = crprActive();
+  crpr_active_ = sdc_->crprActive();
+  if (search_)
+    always_save_prev_paths_ = search_->alwaysSavePrevPaths();
 }
 
 
@@ -1155,7 +1132,7 @@ void
 ArrivalVisitor::visit(Vertex *vertex)
 {
   debugPrint(debug_, "search", 2, "find arrivals %s",
-             vertex->to_string(this).c_str());
+             vertex->name(sdc_network_));
   Pin *pin = vertex->pin();
   tag_bldr_->init(vertex);
   has_fanin_one_ = graph_->hasFaninOne(vertex);
@@ -1167,8 +1144,6 @@ ArrivalVisitor::visit(Vertex *vertex)
   if (crpr_active_
       && search_->crprPathPruningEnabled()
       && !vertex->crprPathPruningDisabled()
-      // No crpr for ideal clocks.
-      && tag_bldr_->hasPropagatedClk()
       && !has_fanin_one_)
     pruneCrprArrivals();
 
@@ -1210,7 +1185,9 @@ ArrivalVisitor::visit(Vertex *vertex)
       || arrivals_changed)
     search_->arrivalIterator()->enqueueAdjacentVertices(vertex, adj_pred_);
   if (arrivals_changed) {
-    debugPrint(debug_, "search", 4, "arrivals changed");
+    debugPrint(debug_, "search", 4, "arrival changed");
+    // Only update arrivals when delays change by more than
+    // fuzzyEqual can distinguish.
     search_->setVertexArrivals(vertex, tag_bldr_);
     search_->tnsInvalid(vertex);
     constrainedRequiredsInvalid(vertex, is_clk);
@@ -1247,7 +1224,7 @@ ArrivalVisitor::constrainedRequiredsInvalid(Vertex *vertex,
       }
     }
     // Gated clocks.
-    if (is_clk && variables_->gatedClkChecksEnabled()) {
+    if (is_clk && sdc_->gatedClkChecksEnabled()) {
       PinSet enable_pins(network_);
       search_->gatedClk()->gatedClkEnables(vertex, enable_pins);
       for (const Pin *enable : enable_pins)
@@ -1260,21 +1237,28 @@ bool
 Search::arrivalsChanged(Vertex *vertex,
 			TagGroupBldr *tag_bldr)
 {
-  Path *paths1 = graph_->paths(vertex);
-  if (paths1) {
+  Arrival *arrivals1 = graph_->arrivals(vertex);
+  PathPrev *prev_paths1 = graph_->prevPaths(vertex);
+  if (arrivals1) {
     TagGroup *tag_group = tagGroup(vertex);
     if (tag_group == nullptr
-        || tag_group->pathCount() != tag_bldr->pathCount())
+        || tag_group->arrivalMap()->size() != tag_bldr->arrivalMap()->size())
       return true;
-    for (auto const [tag1, path_index1] : *tag_group->pathIndexMap()) {
-      Path *path1 = &paths1[path_index1];
-      Path *path2 = tag_bldr->tagMatchPath(tag1);
-      if (path2 == nullptr
-          || path1->tag(this) != path2->tag(this)
-          || !delayEqual(path1->arrival(), path2->arrival())
-          || path1->prevEdge(this) != path2->prevEdge(this)
-          || path1->prevArc(this) != path2->prevArc(this)
-          || path1->prevPath() != path2->prevPath())
+    ArrivalMap::Iterator arrival_iter1(tag_group->arrivalMap());
+    while (arrival_iter1.hasNext()) {
+      Tag *tag1;
+      int arrival_index1;
+      arrival_iter1.next(tag1, arrival_index1);
+      Arrival &arrival1 = arrivals1[arrival_index1];
+      Tag *tag2;
+      Arrival arrival2;
+      int arrival_index2;
+      tag_bldr->tagMatchArrival(tag1, tag2, arrival2, arrival_index2);
+      if (tag2 != tag1
+	  || !delayEqual(arrival1, arrival2)
+          || (prev_paths1
+              && !PathPrev::equal(prev_paths1[arrival_index1],
+                                       tag_bldr->prevPath(arrival_index2))))
 	return true;
     }
     return false;
@@ -1284,11 +1268,11 @@ Search::arrivalsChanged(Vertex *vertex,
 }
 
 bool
-ArrivalVisitor::visitFromToPath(const Pin * /* from_pin */,
+ArrivalVisitor::visitFromToPath(const Pin *,
 				Vertex *from_vertex,
 				const RiseFall *from_rf,
 				Tag *from_tag,
-				Path *from_path,
+				PathVertex *from_path,
                                 const Arrival &from_arrival,
 				Edge *edge,
 				TimingArc *arc,
@@ -1301,38 +1285,50 @@ ArrivalVisitor::visitFromToPath(const Pin * /* from_pin */,
 				const PathAnalysisPt *)
 {
   debugPrint(debug_, "search", 3, " %s",
-             from_vertex->to_string(this).c_str());
+             from_vertex->name(sdc_network_));
   debugPrint(debug_, "search", 3, "  %s -> %s %s",
-             from_rf->to_string().c_str(),
-             to_rf->to_string().c_str(),
-             min_max->to_string().c_str());
+             from_rf->asString(),
+             to_rf->asString(),
+             min_max->asString());
   debugPrint(debug_, "search", 3, "  from tag: %s",
-             from_tag->to_string(this).c_str());
+             from_tag->asString(this));
   debugPrint(debug_, "search", 3, "  to tag  : %s",
-             to_tag->to_string(this).c_str());
+             to_tag->asString(this));
   ClkInfo *to_clk_info = to_tag->clkInfo();
   bool to_is_clk = to_tag->isClock();
-  Path *match;
-  size_t path_index;
-  tag_bldr_->tagMatchPath(to_tag, match, path_index);
-  if (match == nullptr
-      || delayGreater(to_arrival, match->arrival(), min_max, this)) {
+  Arrival arrival;
+  int arrival_index;
+  Tag *tag_match;
+  tag_bldr_->tagMatchArrival(to_tag, tag_match, arrival, arrival_index);
+  if (tag_match == nullptr
+      || delayGreater(to_arrival, arrival, min_max, this)) {
     debugPrint(debug_, "search", 3, "   %s + %s = %s %s %s",
                delayAsString(from_arrival, this),
                delayAsString(arc_delay, this),
                delayAsString(to_arrival, this),
                min_max == MinMax::max() ? ">" : "<",
-               match ? delayAsString(match->arrival(), this) : "MIA");
-    tag_bldr_->setMatchPath(match, path_index, to_tag, to_arrival, from_path, edge, arc);
+               tag_match ? delayAsString(arrival, this) : "MIA");
+    PathPrev prev_path;
+    bool always_save_prev_paths = true;
+    bool save_prev = always_save_prev_paths
+      || to_tag->isClock()
+      || to_tag->isGenClkSrcPath();
+    if (save_prev)
+      prev_path.init(from_path, edge, arc, this);
+    tag_bldr_->setMatchArrival(to_tag, tag_match,
+			       to_arrival, arrival_index,
+			       &prev_path);
     if (crpr_active_
 	&& !has_fanin_one_
 	&& to_clk_info->hasCrprClkPin()
 	&& !to_is_clk) {
-      tag_bldr_no_crpr_->tagMatchPath(to_tag, match, path_index);
-      if (match == nullptr
-	  || delayGreater(to_arrival, match->arrival(), min_max, this)) {
-	tag_bldr_no_crpr_->setMatchPath(match, path_index, to_tag, to_arrival,
-                                        from_path, edge, arc);
+      tag_bldr_no_crpr_->tagMatchArrival(to_tag, tag_match,
+					 arrival, arrival_index);
+      if (tag_match == nullptr
+	  || delayGreater(to_arrival, arrival, min_max, this)) {
+	tag_bldr_no_crpr_->setMatchArrival(to_tag, tag_match,
+					   to_arrival, arrival_index,
+					   &prev_path);
       }
     }
   }
@@ -1343,40 +1339,43 @@ void
 ArrivalVisitor::pruneCrprArrivals()
 {
   CheckCrpr *crpr = search_->checkCrpr();
-  PathIndexMap &path_index_map = tag_bldr_->pathIndexMap();
-  for (auto path_itr = path_index_map.cbegin(); path_itr != path_index_map.cend(); ) {
-    Tag *tag = path_itr->first;
-    size_t path_index = path_itr->second;
+  ArrivalMap *arrival_map = tag_bldr_->arrivalMap();
+  for (auto arrival_itr = arrival_map->cbegin(); arrival_itr != arrival_map->cend(); ) {
+    Tag *tag = arrival_itr->first;
+    int arrival_index = arrival_itr->second;
     ClkInfo *clk_info = tag->clkInfo();
     bool deleted_tag = false;
     if (!tag->isClock()
 	&& clk_info->hasCrprClkPin()) {
       PathAnalysisPt *path_ap = tag->pathAnalysisPt(this);
       const MinMax *min_max = path_ap->pathMinMax();
-      Path *path_no_crpr = tag_bldr_no_crpr_->tagMatchPath(tag);
-      if (path_no_crpr) {
-        Arrival max_arrival = path_no_crpr->arrival();
-	ClkInfo *clk_info_no_crpr = path_no_crpr->clkInfo(this);
+      Tag *tag_no_crpr;
+      Arrival max_arrival;
+      int max_arrival_index;
+      tag_bldr_no_crpr_->tagMatchArrival(tag, tag_no_crpr,
+					 max_arrival, max_arrival_index);
+      if (tag_no_crpr) {
+	ClkInfo *clk_info_no_crpr = tag_no_crpr->clkInfo();
 	Arrival max_crpr = crpr->maxCrpr(clk_info_no_crpr);
 	Arrival max_arrival_max_crpr = (min_max == MinMax::max())
 	  ? max_arrival - max_crpr
 	  : max_arrival + max_crpr;
 	debugPrint(debug_, "search", 4, "  cmp %s %s - %s = %s",
-                   tag->to_string(this).c_str(),
+                   tag->asString(this),
                    delayAsString(max_arrival, this),
                    delayAsString(max_crpr, this),
                    delayAsString(max_arrival_max_crpr, this));
-        Arrival arrival = tag_bldr_->arrival(path_index);
+	Arrival arrival = tag_bldr_->arrival(arrival_index);
 	if (delayGreater(max_arrival_max_crpr, arrival, min_max, this)) {
 	  debugPrint(debug_, "search", 3, "  pruned %s",
-                     tag->to_string(this).c_str());
-          path_itr = path_index_map.erase(path_itr);
+                     tag->asString(this));
+          arrival_itr = arrival_map->erase(arrival_itr);
           deleted_tag = true;
 	}
       }
     }
     if (!deleted_tag)
-      path_itr++;
+      arrival_itr++;
   }
 }
 
@@ -1505,9 +1504,8 @@ Search::seedArrival(Vertex *vertex)
     }
   }
   else {
-    debugPrint(debug_, "search", 4, "arrival enqueue %s %u",
-               network_->pathName(pin),
-               vertex->level());
+    debugPrint(debug_, "search", 2, "arrival enqueue %s",
+               network_->pathName(pin));
     arrival_iter_->enqueue(vertex);
   }
 }
@@ -1590,7 +1588,7 @@ Search::seedClkArrival(const Pin *pin,
     uncertainties = clk->uncertainties();
   // Propagate liberty "pulse_clock" transition to transitive fanout.
   LibertyPort *port = network_->libertyPort(pin);
-  const RiseFall *pulse_clk_sense = (port ? port->pulseClkSense() : nullptr);
+  RiseFall *pulse_clk_sense = (port ? port->pulseClkSense() : nullptr);
   ClkInfo *clk_info = findClkInfo(clk_edge, pin, is_propagated, nullptr, false,
 				  pulse_clk_sense, insertion, latency,
 				  uncertainties, path_ap, nullptr);
@@ -1599,7 +1597,7 @@ Search::seedClkArrival(const Pin *pin,
   sdc_->exceptionFromClkStates(pin,rf,clk,rf,min_max,states);
   Tag *tag = findTag(rf, path_ap, clk_info, true, nullptr, false, states, true);
   Arrival arrival(clk_edge->time() + insertion);
-  tag_bldr->setArrival(tag, arrival);
+  tag_bldr->setArrival(tag, arrival, nullptr);
 }
 
 void
@@ -1616,7 +1614,7 @@ Search::seedClkDataArrival(const Pin *pin,
   if (tag) {
     // Data arrivals include insertion delay.
     Arrival arrival(clk_edge->time() + insertion);
-    tag_bldr->setArrival(tag, arrival);
+    tag_bldr->setArrival(tag, arrival, nullptr);
   }
 }
 
@@ -1653,12 +1651,12 @@ Search::makeUnclkedPaths(Vertex *vertex,
   const Pin *pin = vertex->pin();
   for (PathAnalysisPt *path_ap : corners_->pathAnalysisPts()) {
     const MinMax *min_max = path_ap->pathMinMax();
-    for (const RiseFall *rf : RiseFall::range()) {
+    for (RiseFall *rf : RiseFall::range()) {
       Tag *tag = fromUnclkedInputTag(pin, rf, min_max, path_ap,
 				     is_segment_start,
                                      require_exception);
       if (tag) {
-	tag_bldr->setArrival(tag, delay_zero);
+	tag_bldr->setArrival(tag, delay_zero, nullptr);
 	search_from = true;
       }
     }
@@ -1808,17 +1806,17 @@ Search::seedInputDelayArrival(const Pin *pin,
              input_delay
              ? "arrival seed input arrival %s"
              : "arrival seed input %s",
-             vertex->to_string(this).c_str());
+             vertex->name(sdc_network_));
   const ClockEdge *clk_edge = nullptr;
   const Pin *ref_pin = nullptr;
   if (input_delay) {
     clk_edge = input_delay->clkEdge();
     if (clk_edge == nullptr
-	&& variables_->useDefaultArrivalClock())
+	&& sdc_->useDefaultArrivalClock())
       clk_edge = sdc_->defaultArrivalClockEdge();
     ref_pin = input_delay->refPin();
   }
-  else if (variables_->useDefaultArrivalClock())
+  else if (sdc_->useDefaultArrivalClock())
     clk_edge = sdc_->defaultArrivalClockEdge();
   if (ref_pin) {
     Vertex *ref_vertex = graph_->pinLoadVertex(ref_pin);
@@ -1869,7 +1867,7 @@ Search::inputDelayRefPinArrival(Path *ref_path,
   Clock *clk = clk_edge->clock();
   if (clk->isPropagated()) {
     ClkInfo *clk_info = ref_path->clkInfo(this);
-    ref_arrival = delayAsFloat(ref_path->arrival());
+    ref_arrival = delayAsFloat(ref_path->arrival(this));
     ref_insertion = delayAsFloat(clk_info->insertion());
     ref_latency = clk_info->latency();
   }
@@ -1896,7 +1894,7 @@ Search::seedInputDelayArrival(const Pin *pin,
 			      PathAnalysisPt *path_ap,
 			      TagGroupBldr *tag_bldr)
 {
-  for (const RiseFall *rf : RiseFall::range()) {
+  for (RiseFall *rf : RiseFall::range()) {
     if (input_delay) {
       float delay;
       bool exists;
@@ -1930,7 +1928,7 @@ Search::seedInputDelayArrival(const Pin *pin,
   Tag *tag = inputDelayTag(pin, rf, clk_edge, clk_insertion, clk_latency,
 			   input_delay, is_segment_start, min_max, path_ap);
   if (tag)
-    tag_bldr->setArrival(tag, arrival);
+    tag_bldr->setArrival(tag, arrival, nullptr);
 }
 
 void
@@ -1948,7 +1946,7 @@ Search::inputDelayClkArrival(InputDelay *input_delay,
   if (input_delay && clk_edge) {
     clk_arrival = clk_edge->time();
     Clock *clk = clk_edge->clock();
-    const RiseFall *clk_rf = clk_edge->transition();
+    RiseFall *clk_rf = clk_edge->transition();
     if (!input_delay->sourceLatencyIncluded()) {
       const EarlyLate *early_late = min_max;
       clk_insertion = delayAsFloat(clockInsertion(clk, clk->defaultPin(),
@@ -1977,7 +1975,7 @@ Search::inputDelayTag(const Pin *pin,
 {
   Clock *clk = nullptr;
   const Pin *clk_pin = nullptr;
-  const RiseFall *clk_rf = nullptr;
+  RiseFall *clk_rf = nullptr;
   bool is_propagated = false;
   ClockUncertainties *clk_uncertainties = nullptr;
   if (clk_edge) {
@@ -2055,7 +2053,7 @@ PathVisitor::visitFanoutPaths(Vertex *from_vertex)
       if (pred_->searchTo(to_vertex)
 	  && pred_->searchThru(edge)) {
 	debugPrint(debug_, "search", 3, " %s",
-                   to_vertex->to_string(this).c_str());
+                   to_vertex->name(network_));
 	if (!visitEdge(from_pin, from_vertex, edge, to_pin, to_vertex))
 	  break;
       }
@@ -2075,7 +2073,7 @@ PathVisitor::visitEdge(const Pin *from_pin,
     TimingArcSet *arc_set = edge->timingArcSet();
     VertexPathIterator from_iter(from_vertex, search_);
     while (from_iter.hasNext()) {
-      Path *from_path = from_iter.next();
+      PathVertex *from_path = from_iter.next();
       PathAnalysisPt *path_ap = from_path->pathAnalysisPt(this);
       const MinMax *min_max = path_ap->pathMinMax();
       const RiseFall *from_rf = from_path->transition(this);
@@ -2098,7 +2096,7 @@ bool
 PathVisitor::visitArc(const Pin *from_pin,
 		      Vertex *from_vertex,
 		      const RiseFall *from_rf,
-		      Path *from_path,
+		      PathVertex *from_path,
 		      Edge *edge,
 		      TimingArc *arc,
 		      const Pin *to_pin,
@@ -2107,7 +2105,7 @@ PathVisitor::visitArc(const Pin *from_pin,
 		      PathAnalysisPt *path_ap)
 {
   if (arc) {
-    const RiseFall *to_rf = arc->toEdge()->asRiseFall();
+    RiseFall *to_rf = arc->toEdge()->asRiseFall();
     if (searchThru(from_vertex, from_rf, edge, to_vertex, to_rf))
       return visitFromPath(from_pin, from_vertex, from_rf, from_path,
 			   edge, arc, to_pin, to_vertex, to_rf,
@@ -2120,7 +2118,7 @@ bool
 PathVisitor::visitFromPath(const Pin *from_pin,
 			   Vertex *from_vertex,
 			   const RiseFall *from_rf,
-			   Path *from_path,
+			   PathVertex *from_path,
 			   Edge *edge,
 			   TimingArc *arc,
 			   const Pin *to_pin,
@@ -2135,12 +2133,12 @@ PathVisitor::visitFromPath(const Pin *from_pin,
   Tag *to_tag = nullptr;
   const ClockEdge *clk_edge = from_clk_info->clkEdge();
   const Clock *clk = from_clk_info->clock();
-  Arrival from_arrival = from_path->arrival();
+  Arrival from_arrival = from_path->arrival(this);
   ArcDelay arc_delay = 0.0;
   Arrival to_arrival;
   if (from_clk_info->isGenClkSrcPath()) {
     if (!sdc_->clkStopPropagation(clk,from_pin,from_rf,to_pin,to_rf)
-	&& (variables_->clkThruTristateEnabled()
+	&& (sdc_->clkThruTristateEnabled()
 	    || !(role == TimingRole::tristateEnable()
 		 || role == TimingRole::tristateDisable()))) {
       const Clock *gclk = from_tag->genClkSrcPathClk(this);
@@ -2158,19 +2156,13 @@ PathVisitor::visitFromPath(const Pin *from_pin,
 	     || !gclk->combinational())
 	    && fanins->hasKey(to_vertex)
 	    && !(fdbk_edges && fdbk_edges->hasKey(edge))) {
-          arc_delay = search_->deratedDelay(from_vertex, arc, edge,
-                                            true, path_ap);
-          const PathAnalysisPt *path_ap_opp =
-            path_ap->corner()->findPathAnalysisPt(min_max->opposite());
-          Delay arc_delay_opp = search_->deratedDelay(from_vertex, arc, edge,
-                                                      true, path_ap_opp);
-          bool arc_delay_min_max_eq =
-            fuzzyEqual(delayAsFloat(arc_delay), delayAsFloat(arc_delay_opp));
-	  to_tag = search_->thruClkTag(from_path, from_vertex, from_tag, true,
-                                       edge, to_rf, arc_delay_min_max_eq,
+	  to_tag = search_->thruClkTag(from_path, from_tag, true, edge, to_rf,
                                        min_max, path_ap);
-	  if (to_tag)
+	  if (to_tag) {
+	    arc_delay = search_->deratedDelay(from_vertex, arc, edge, true,
+                                              path_ap);
 	    to_arrival = from_arrival + arc_delay;
+	  }
 	}
       }
     }
@@ -2203,8 +2195,7 @@ PathVisitor::visitFromPath(const Pin *from_pin,
 	      && from_tag->isClock())) {
 	const RiseFall *clk_rf = clk_edge ? clk_edge->transition() : nullptr;
 	ClkInfo *to_clk_info = from_clk_info;
-	if (from_clk_info->crprClkPath(this) == nullptr
-            || network_->direction(to_pin)->isInternal())
+	if (network_->direction(to_pin)->isInternal())
 	  to_clk_info = search_->clkInfoWithCrprClkPath(from_clk_info,
                                                         from_path, path_ap);
 	to_tag = search_->fromRegClkTag(from_pin, from_rf, clk, clk_rf,
@@ -2244,21 +2235,13 @@ PathVisitor::visitFromPath(const Pin *from_pin,
       // Propagate arrival as non-clock at the end of the clock tree.
       bool to_propagates_clk =
 	!sdc_->clkStopPropagation(clk,from_pin,from_rf,to_pin,to_rf)
-	&& (variables_->clkThruTristateEnabled()
+	&& (sdc_->clkThruTristateEnabled()
 	    || !(role == TimingRole::tristateEnable()
 		 || role == TimingRole::tristateDisable()));
       arc_delay = search_->deratedDelay(from_vertex, arc, edge,
                                         to_propagates_clk, path_ap);
-      const PathAnalysisPt *path_ap_opp =
-        path_ap->corner()->findPathAnalysisPt(min_max->opposite());
-      Delay arc_delay_opp = search_->deratedDelay(from_vertex, arc, edge,
-                                                  to_propagates_clk, path_ap_opp);
-      bool arc_delay_min_max_eq =
-        fuzzyEqual(delayAsFloat(arc_delay), delayAsFloat(arc_delay_opp));
-      to_tag = search_->thruClkTag(from_path, from_vertex, from_tag,
-                                   to_propagates_clk, edge, to_rf,
-                                   arc_delay_min_max_eq,
-                                   min_max, path_ap);
+      to_tag = search_->thruClkTag(from_path, from_tag, to_propagates_clk,
+                                   edge, to_rf, min_max, path_ap);
       to_arrival = from_arrival + arc_delay;
     }
   }
@@ -2310,7 +2293,7 @@ Search::clkPathArrival(const Path *clk_path,
       + clk_info->latency();
   }
   else
-    return clk_path->arrival();
+    return clk_path->arrival(this);
 }
 
 Arrival
@@ -2318,9 +2301,9 @@ Search::pathClkPathArrival(const Path *path) const
 {
   ClkInfo *clk_info = path->clkInfo(this);
   if (clk_info->isPropagated()) {
-    const Path *src_clk_path = pathClkPathArrival1(path);
-    if (src_clk_path)
-      return clkPathArrival(src_clk_path);
+    PathRef src_clk_path =  pathClkPathArrival1(path);
+    if (!src_clk_path.isNull())
+      return clkPathArrival(&src_clk_path);
   }
   // Check for input arrival clock.
   const ClockEdge *clk_edge = path->clkEdge(this);
@@ -2330,30 +2313,34 @@ Search::pathClkPathArrival(const Path *path) const
 }
 
 // PathExpanded::expand() and PathExpanded::clkPath().
-const Path *
+PathRef
 Search::pathClkPathArrival1(const Path *path) const
 {
-  const Path *p = path;
-  while (p) {
-    Path *prev_path = p->prevPath();
-    Edge *prev_edge = p->prevEdge(this);
+  PathRef p(path);
+  while (!p.isNull()) {
+    PathRef prev_path;
+    TimingArc *prev_arc;
+    p.prevPath(this, prev_path, prev_arc);
 
-    if (p->isClock(this))
+    if (p.isClock(this))
       return p;
-    if (prev_edge) {
-      const TimingRole *prev_role = prev_edge->role();
+    if (prev_arc) {
+      TimingRole *prev_role = prev_arc->role();
       if (prev_role == TimingRole::regClkToQ()
 	  || prev_role == TimingRole::latchEnToQ()) {
-	return p->prevPath();
+	p.prevPath(this, prev_path, prev_arc);
+	return prev_path;
       }
       else if (prev_role == TimingRole::latchDtoQ()) {
-	Path *enable_path = latches_->latchEnablePath(p, prev_edge);
+	Edge *prev_edge = p.prevEdge(prev_arc, this);
+	PathVertex enable_path;
+	latches_->latchEnablePath(&p, prev_edge, enable_path);
 	return enable_path;
       }
     }
-    p = prev_path;
+    p.init(prev_path);
   }
-  return nullptr;
+  return PathRef();
 }
 
 ////////////////////////////////////////////////////////////////
@@ -2403,10 +2390,10 @@ Search::fromRegClkTag(const Pin *from_pin,
 // Insert from_path as ClkInfo crpr_clk_path.
 ClkInfo *
 Search::clkInfoWithCrprClkPath(ClkInfo *from_clk_info,
-			       Path *from_path,
+			       PathVertex *from_path,
 			       const PathAnalysisPt *path_ap)
 {
-  if (crprActive())
+  if (sdc_->crprActive())
     return findClkInfo(from_clk_info->clkEdge(),
 		       from_clk_info->clkSrc(),
 		       from_clk_info->isPropagated(),
@@ -2443,15 +2430,12 @@ Search::thruTag(Tag *from_tag,
   return to_tag;
 }
 
-// thruTag for clocks.
 Tag *
-Search::thruClkTag(Path *from_path,
-                   Vertex *from_vertex,
+Search::thruClkTag(PathVertex *from_path,
 		   Tag *from_tag,
 		   bool to_propagates_clk,
 		   Edge *edge,
 		   const RiseFall *to_rf,
-                   bool arc_delay_min_max_eq,
 		   const MinMax *min_max,
 		   const PathAnalysisPt *path_ap)
 {
@@ -2462,30 +2446,27 @@ Search::thruClkTag(Path *from_path,
   ClkInfo *from_clk_info = from_tag->clkInfo();
   bool from_is_clk = from_tag->isClock();
   bool to_is_reg_clk = to_vertex->isRegClk();
-  const TimingRole *role = edge->role();
+  TimingRole *role = edge->role();
   bool to_is_clk = (from_is_clk
 		    && to_propagates_clk
 		    && (role->isWire()
 			|| role == TimingRole::combinational()));
-  ClkInfo *to_clk_info = thruClkInfo(from_path, from_vertex, from_clk_info, from_is_clk,
-				     edge, to_vertex, to_pin, to_is_clk,
-                                     arc_delay_min_max_eq, min_max, path_ap);
+  ClkInfo *to_clk_info = thruClkInfo(from_path, from_clk_info,
+				     edge, to_vertex, to_pin,
+                                     min_max, path_ap);
   Tag *to_tag = mutateTag(from_tag,from_pin,from_rf,from_is_clk,from_clk_info,
 			  to_pin, to_rf, to_is_clk, to_is_reg_clk, false,
 			  to_clk_info, nullptr, min_max, path_ap);
   return to_tag;
 }
 
+// thruTag for clocks.
 ClkInfo *
-Search::thruClkInfo(Path *from_path,
-		    Vertex *from_vertex,
+Search::thruClkInfo(PathVertex *from_path,
 		    ClkInfo *from_clk_info,
-                    bool from_is_clk,
 		    Edge *edge,
 		    Vertex *to_vertex,
-		    const Pin *to_pin,
-                    bool to_is_clk,
-                    bool arc_delay_min_max_eq,
+                    const Pin *to_pin,
 		    const MinMax *min_max,
 		    const PathAnalysisPt *path_ap)
 {
@@ -2507,32 +2488,23 @@ Search::thruClkInfo(Path *from_path,
   // the clkinfo.
   const Pin *gen_clk_src = nullptr;
   if (from_clk_info->isGenClkSrcPath()
-      && crprActive()
+      && sdc_->crprActive()
       && sdc_->isClock(to_pin)) {
     // Don't care that it could be a regular clock root.
     gen_clk_src = to_pin;
     changed = true;
   }
 
-  Path *to_crpr_clk_path = nullptr;
-  if (crprActive()
-      // Update crpr clk path for combinational paths leaving the clock
-      // network (ie, tristate en->out) and buffer driving reg clk.
-      && ((from_is_clk
-           && !to_is_clk
-           && !from_vertex->isRegClk())
-          || (to_vertex->isRegClk()
-              // If the wire delay to the reg clk pin is zero,
-              // leave the crpr_clk_path null to indicate that
-              // the reg clk path is the crpr clk path.
-              && arc_delay_min_max_eq))) {
+  PathVertex *to_crpr_clk_path = nullptr;
+  if (sdc_->crprActive()
+      && to_vertex->isRegClk()) {
     to_crpr_clk_path = from_path;
     changed = true;
   }
 
   // Propagate liberty "pulse_clock" transition to transitive fanout.
-  const RiseFall *from_pulse_sense = from_clk_info->pulseClkSense();
-  const RiseFall *to_pulse_sense = from_pulse_sense;
+  RiseFall *from_pulse_sense = from_clk_info->pulseClkSense();
+  RiseFall *to_pulse_sense = from_pulse_sense;
   LibertyPort *port = network_->libertyPort(to_pin);
   if (port && port->pulseClkSense()) {
     to_pulse_sense = port->pulseClkSense();
@@ -2745,27 +2717,54 @@ Search::setVertexArrivals(Vertex *vertex,
     deletePathsIncr(vertex);
   else {
     TagGroup *prev_tag_group = tagGroup(vertex);
-    Path *prev_paths = graph_->paths(vertex);
+    Arrival *prev_arrivals = graph_->arrivals(vertex);
+    PathPrev *prev_paths = graph_->prevPaths(vertex);
+    bool save_prev = always_save_prev_paths_
+      || tag_bldr->hasClkTag()
+      || tag_bldr->hasGenClkSrcTag();
+
     TagGroup *tag_group = findTagGroup(tag_bldr);
-    size_t path_count = tag_group->pathCount();
-    // Reuse path array if it is the same size.
+    int arrival_count = tag_group->arrivalCount();
+    bool has_requireds = vertex->hasRequireds();
+    // Reuse arrival array if it is the same size.
     if (prev_tag_group
-	&& path_count == prev_tag_group->pathCount()) {
-      tag_bldr->copyPaths(tag_group, prev_paths);
+	&& arrival_count == prev_tag_group->arrivalCount()) {
+      if  (save_prev) {
+	if (prev_paths == nullptr)
+	  prev_paths = graph_->makePrevPaths(vertex, arrival_count);
+      }
+      else {
+	// Prev paths not required.
+	prev_paths = nullptr;
+        graph_->deletePrevPaths(vertex);
+      }
+      tag_bldr->copyArrivals(tag_group, prev_arrivals, prev_paths);
       vertex->setTagGroupIndex(tag_group->index());
       if (tag_group->hasFilterTag()) {
         LockGuard lock(filtered_arrivals_lock_);
         filtered_arrivals_->insert(vertex);
       }
-      requiredInvalid(vertex);
+
+      if (has_requireds) {
+	requiredInvalid(vertex);
+        if (tag_group != prev_tag_group)
+          // Requireds can only be reused if the tag group is unchanged.
+          graph_->deleteRequireds(vertex);
+      }
     }
     else {
       if (prev_tag_group) {
-        graph_->deletePaths(vertex);
-        requiredInvalid(vertex);
+        graph_->deleteArrivals(vertex);
+        if (has_requireds) {
+          requiredInvalid(vertex);
+          graph_->deleteRequireds(vertex);
+        }
       }
-      Path *paths = graph_->makePaths(vertex, path_count);
-      tag_bldr->copyPaths(tag_group, paths);
+      Arrival *arrivals = graph_->makeArrivals(vertex, arrival_count);
+      prev_paths = nullptr;
+      if  (save_prev)
+	prev_paths = graph_->makePrevPaths(vertex, arrival_count);
+      tag_bldr->copyArrivals(tag_group, arrivals, prev_paths);
 
       vertex->setTagGroupIndex(tag_group->index());
       if (tag_group->hasFilterTag()) {
@@ -2776,72 +2775,61 @@ Search::setVertexArrivals(Vertex *vertex,
   }
 }
 
-class ReportPathLess
-{
-public:
-  ReportPathLess(const StaState *sta);
-  bool operator()(const Path *path1,
-		  const Path *path2) const;
-
-private:
-  const StaState *sta_;
-};
-
-
-ReportPathLess::ReportPathLess(const StaState *sta) :
-  sta_(sta)
-{
-}
-
-bool
-ReportPathLess::operator()(const Path *path1,
-                           const Path *path2) const
-{
-  return tagCmp(path1->tag(sta_), path2->tag(sta_), sta_) < 0;
-}
-
 void
 Search::reportArrivals(Vertex *vertex) const
 {
-  report_->reportLine("Vertex %s", vertex->to_string(this).c_str());
+  report_->reportLine("Vertex %s", vertex->name(sdc_network_));
   TagGroup *tag_group = tagGroup(vertex);
+  Arrival *arrivals = graph_->arrivals(vertex);
+  Required *requireds = graph_->requireds(vertex);
+  PathPrev *prev_paths = graph_->prevPaths(vertex);
   if (tag_group) {
     report_->reportLine("Group %u", tag_group->index());
-    std::vector<const Path*> paths;
-    VertexPathIterator path_iter(vertex, this);
-    while (path_iter.hasNext()) {
-      const Path *path = path_iter.next();
-      paths.push_back(path);
-    }
-    sort(paths.begin(), paths.end(), ReportPathLess(this));
-    for (const Path *path : paths) {
-      const Tag *tag = path->tag(this);
-      const PathAnalysisPt *path_ap = tag->pathAnalysisPt(this);
+    ArrivalMap::Iterator arrival_iter(tag_group->arrivalMap());
+    while (arrival_iter.hasNext()) {
+      Tag *tag;
+      int arrival_index;
+      arrival_iter.next(tag, arrival_index);
+      PathAnalysisPt *path_ap = tag->pathAnalysisPt(this);
       const RiseFall *rf = tag->transition();
-      const char *req = delayAsString(path->required(), this);
-      std::string prev_str;
-      Path *prev_path = path->prevPath();
-      if (prev_path) {
-        prev_str += prev_path->to_string(this);
-        prev_str += " ";
-        const Edge *prev_edge = path->prevEdge(this);
-        TimingArc *arc = path->prevArc(this);
-        prev_str += prev_edge->from(graph_)->to_string(this);
-        prev_str += " ";
-        prev_str += arc->fromEdge()->to_string();
-        prev_str += " -> ";
-        prev_str += prev_edge->to(graph_)->to_string(this);
-        prev_str += " ";
-        prev_str += arc->toEdge()->to_string();
+      const char *req = "?";
+      if (requireds)
+        req = delayAsString(requireds[arrival_index], this);
+      bool report_clk_prev = false;
+      const char *clk_prev = "";
+      if (report_clk_prev
+	  && tag_group->hasClkTag()) {
+	PathVertex prev = check_crpr_->clkPathPrev(vertex, arrival_index);
+        if (!prev.isNull())
+          clk_prev = prev.name(this);
       }
-      else
-        prev_str = "NULL";
-      report_->reportLine(" %s %s %s / %s %s prev %s",
-                          rf->to_string().c_str(),
-                          path_ap->pathMinMax()->to_string().c_str(),
-                          delayAsString(path->arrival(), this),
+      string prev_str;
+      if (prev_paths) {
+        PathPrev &prev = prev_paths[arrival_index];
+        if (!prev.isNull()) {
+          prev_str += prev.name(this);
+          prev_str += " ";
+          const Edge *prev_edge = prev.prevEdge(this);
+          TimingArc *arc = prev.prevArc(this);
+          prev_str += prev_edge->from(graph_)->name(network_);
+          prev_str += " ";
+          prev_str += arc->fromEdge()->asString();
+          prev_str += " -> ";
+          prev_str += prev_edge->to(graph_)->name(network_);
+          prev_str += " ";
+          prev_str += arc->toEdge()->asString();
+        }
+        else
+          prev_str = "NULL";
+      }
+      report_->reportLine(" %d %s %s %s / %s %s %s prev %s",
+                          arrival_index,
+                          rf->asString(),
+                          path_ap->pathMinMax()->asString(),
+                          delayAsString(arrivals[arrival_index], this),
                           req,
-                          tag->to_string(true, false, this).c_str(),
+                          tag->asString(true, false, this),
+                          clk_prev,
                           prev_str.c_str());
     }
   }
@@ -2895,7 +2883,7 @@ Search::reportTagGroups() const
 }
 
 void
-Search::reportPathCountHistogram() const
+Search::reportArrivalCountHistogram() const
 {
   Vector<int> vertex_counts(10);
   VertexIterator vertex_iter(graph_);
@@ -2903,17 +2891,17 @@ Search::reportPathCountHistogram() const
     Vertex *vertex = vertex_iter.next();
     TagGroup *tag_group = tagGroup(vertex);
     if (tag_group) {
-      size_t path_count = tag_group->pathCount();
-      if (path_count >= vertex_counts.size())
-	vertex_counts.resize(path_count * 2);
-      vertex_counts[path_count]++;
+      size_t arrival_count = tag_group->arrivalCount();
+      if (arrival_count >= vertex_counts.size())
+	vertex_counts.resize(arrival_count * 2);
+      vertex_counts[arrival_count]++;
     }
   }
 
-  for (size_t path_count = 0; path_count < vertex_counts.size(); path_count++) {
-    int vertex_count = vertex_counts[path_count];
+  for (size_t arrival_count = 0; arrival_count < vertex_counts.size(); arrival_count++) {
+    int vertex_count = vertex_counts[arrival_count];
     if (vertex_count > 0)
-      report_->reportLine("%6lu %6d",path_count, vertex_count);
+      report_->reportLine("%6lu %6d", arrival_count, vertex_count);
   }
 }
 
@@ -2989,7 +2977,7 @@ Search::reportTags() const
   for (TagIndex i = 0; i < tag_next_; i++) {
     Tag *tag = tags_[i];
     if (tag)
-      report_->reportLine("%s", tag->to_string(this).c_str()) ;
+      report_->reportLine("%s", tag->asString(this)) ;
   }
   size_t long_hash = 0;
   for (size_t i = 0; i < tag_set_->bucket_count(); i++) {
@@ -3010,7 +2998,7 @@ Search::reportClkInfos() const
     clk_infos.push_back(clk_info);
   sort(clk_infos, ClkInfoLess(this));
   for (ClkInfo *clk_info : clk_infos)
-    report_->reportLine("%s", clk_info->to_string(this).c_str());
+    report_->reportLine("%s", clk_info->asString(this));
   report_->reportLine("%zu clk infos", clk_info_set_->size());
 }
 
@@ -3025,18 +3013,19 @@ Search::findClkInfo(const ClockEdge *clk_edge,
 		    float latency,
 		    ClockUncertainties *uncertainties,
                     const PathAnalysisPt *path_ap,
-		    Path *crpr_clk_path)
+		    PathVertex *crpr_clk_path)
 {
+  PathVertexPtr crpr_clk_path_ptr(crpr_clk_path, this);
   ClkInfo probe(clk_edge, clk_src, is_propagated, gen_clk_src, gen_clk_src_path,
 		pulse_clk_sense, insertion, latency, uncertainties,
-		path_ap->index(), crpr_clk_path, this);
+		path_ap->index(), crpr_clk_path_ptr, this);
   LockGuard lock(clk_info_lock_);
   ClkInfo *clk_info = clk_info_set_->findKey(&probe);
   if (clk_info == nullptr) {
     clk_info = new ClkInfo(clk_edge, clk_src,
 			   is_propagated, gen_clk_src, gen_clk_src_path,
 			   pulse_clk_sense, insertion, latency, uncertainties,
-			   path_ap->index(), crpr_clk_path, this);
+			   path_ap->index(), crpr_clk_path_ptr, this);
     clk_info_set_->insert(clk_info);
   }
   return clk_info;
@@ -3082,7 +3071,7 @@ Search::timingDerate(const Vertex *from_vertex,
 {
   PathClkOrData derate_clk_data =
     is_clk ? PathClkOrData::clk : PathClkOrData::data;
-  const TimingRole *role = edge->role();
+  TimingRole *role = edge->role();
   const Pin *pin = from_vertex->pin();
   if (role->isWire()) {
     const RiseFall *rf = arc->toEdge()->asRiseFall();
@@ -3215,7 +3204,6 @@ Search::findRequireds(Level level)
   seedInvalidRequireds();
   int required_count = required_iter_->visitParallel(level, &req_visitor);
   deleteTagsPrev();
-  genclks_->updateSrcPathPrevs();
   requireds_exist_ = true;
   debugPrint(debug_, "search", 1, "found %d requireds", required_count);
   stats.report("Find requireds");
@@ -3242,7 +3230,7 @@ Search::endpoints()
       Vertex *vertex = vertex_iter.next();
       if (isEndpoint(vertex)) {
 	debugPrint(debug_, "endpoint", 2, "insert %s",
-                   vertex->to_string(this).c_str());
+                   vertex->name(sdc_network_));
 	endpoints_->insert(vertex);
       }
     }
@@ -3251,14 +3239,14 @@ Search::endpoints()
     for (Vertex *vertex : *invalid_endpoints_) {
       if (isEndpoint(vertex)) {
 	debugPrint(debug_, "endpoint", 2, "insert %s",
-                   vertex->to_string(this).c_str());
+                   vertex->name(sdc_network_));
 	endpoints_->insert(vertex);
       }
       else {
 	if (debug_->check("endpoint", 2)
 	    && endpoints_->hasKey(vertex))
 	  report_->reportLine("endpoint: remove %s",
-                              vertex->to_string(this).c_str());
+                              vertex->name(sdc_network_));
 	endpoints_->erase(vertex);
       }
     }
@@ -3272,7 +3260,7 @@ Search::endpointInvalid(Vertex *vertex)
 {
   if (invalid_endpoints_) {
     debugPrint(debug_, "endpoint", 2, "invalid %s",
-               vertex->to_string(this).c_str());
+               vertex->name(sdc_network_));
     invalid_endpoints_->insert(vertex);
   }
 }
@@ -3291,7 +3279,7 @@ Search::isEndpoint(Vertex *vertex,
   return hasFanin(vertex, pred, graph_)
     && ((vertex->hasChecks()
 	 && hasEnabledChecks(vertex))
-	|| (variables_->gatedClkChecksEnabled()
+	|| (sdc_->gatedClkChecksEnabled()
 	    && gated_clk_->isGatedClkEnable(vertex))
 	|| vertex->isConstrained()
 	|| sdc_->isPathDelayInternalEndpoint(pin)
@@ -3380,11 +3368,13 @@ void
 FindEndRequiredVisitor::visit(PathEnd *path_end)
 {
   if (!path_end->isUnconstrained()) {
-    Path *path = path_end->path();
-    const MinMax *min_max = path->minMax(sta_)->opposite();
-    size_t path_index = path->pathIndex(sta_);
+    PathRef &path = path_end->pathRef();
+    const MinMax *req_min = path.minMax(sta_)->opposite();
+    int arrival_index;
+    bool arrival_exists;
+    path.arrivalIndex(arrival_index, arrival_exists);
     Required required = path_end->requiredTime(sta_);
-    required_cmp_->requiredSet(path_index, required, min_max, sta_);
+    required_cmp_->requiredSet(arrival_index, required, req_min, sta_);
   }
 }
 
@@ -3392,7 +3382,7 @@ void
 Search::seedRequired(Vertex *vertex)
 {
   debugPrint(debug_, "search", 2, "required seed %s",
-             vertex->to_string(this).c_str());
+             vertex->name(sdc_network_));
   RequiredCmp required_cmp;
   FindEndRequiredVisitor seeder(&required_cmp, this);
   required_cmp.requiredsInit(vertex, this);
@@ -3429,27 +3419,31 @@ RequiredCmp::requiredsInit(Vertex *vertex,
   Search *search = sta->search();
   TagGroup *tag_group = search->tagGroup(vertex);
   if (tag_group) {
-    size_t path_count = tag_group->pathCount();
-    requireds_.resize(path_count);
-    for (auto const [tag, path_index] : *tag_group->pathIndexMap()) {
+    requireds_.resize(tag_group->arrivalCount());
+    ArrivalMap *arrival_entries = tag_group->arrivalMap();
+    ArrivalMap::Iterator arrival_iter(arrival_entries);
+    while (arrival_iter.hasNext()) {
+      Tag *tag;
+      int arrival_index;
+      arrival_iter.next(tag, arrival_index);
       PathAnalysisPt *path_ap = tag->pathAnalysisPt(sta);
       const MinMax *min_max = path_ap->pathMinMax();
-      requireds_[path_index] = delayInitValue(min_max->opposite());
+      requireds_[arrival_index] = delayInitValue(min_max->opposite());
     }
   }
   else
-    requireds_.clear();
+    requireds_.resize(0);
   have_requireds_ = false;
 }
 
 void
-RequiredCmp::requiredSet(size_t path_index,
-			 Required &required,
+RequiredCmp::requiredSet(int arrival_index,
+			 Required required,
 			 const MinMax *min_max,
 			 const StaState *sta)
 {
-  if (delayGreater(required, requireds_[path_index], min_max, sta)) {
-    requireds_[path_index] = required;
+  if (delayGreater(required, requireds_[arrival_index], min_max, sta)) {
+    requireds_[arrival_index] = required;
     have_requireds_ = true;
   }
 }
@@ -3459,29 +3453,53 @@ RequiredCmp::requiredsSave(Vertex *vertex,
 			   const StaState *sta)
 {
   bool requireds_changed = false;
-  Debug *debug = sta->debug();
-  VertexPathIterator path_iter(vertex, sta);
-  while (path_iter.hasNext()) {
-    Path *path = path_iter.next();
-    size_t path_index = path->pathIndex(sta);
-    Required req = requireds_[path_index];
-    Required &prev_req = path->required();
-    bool changed = !delayEqual(prev_req, req);
-    debugPrint(debug, "search", 3, "required %s save %s -> %s%s",
-               path->to_string(sta).c_str(),
-               delayAsString(prev_req, sta),
-               delayAsString(req, sta),
-               changed ? " changed" : "");
-    requireds_changed |= changed;
-    path->setRequired(req);
+  bool prev_reqs = vertex->hasRequireds();
+  if (have_requireds_) {
+    if (!prev_reqs)
+      requireds_changed = true;
+    Debug *debug = sta->debug();
+    VertexPathIterator path_iter(vertex, sta);
+    while (path_iter.hasNext()) {
+      PathVertex *path = path_iter.next();
+      int arrival_index;
+      bool arrival_exists;
+      path->arrivalIndex(arrival_index, arrival_exists);
+      Required req = requireds_[arrival_index];
+      if (prev_reqs) {
+	Required prev_req = path->required(sta);
+	if (!delayEqual(prev_req, req)) {
+	  debugPrint(debug, "search", 3, "required save %s -> %s",
+                     delayAsString(prev_req, sta),
+                     delayAsString(req, sta));
+	  path->setRequired(req, sta);
+	  requireds_changed = true;
+	}
+      }
+      else {
+	debugPrint(debug, "search", 3, "required save MIA -> %s",
+                   delayAsString(req, sta));
+	path->setRequired(req, sta);
+      }
+    }
+  }
+  else if (prev_reqs) {
+    Graph *graph = sta->graph();
+    const Search *search = sta->search();
+    TagGroup *tag_group = search->tagGroup(vertex);
+    if (tag_group == nullptr)
+      requireds_changed = true;
+    else {
+      graph->deleteRequireds(vertex);
+      requireds_changed = true;
+    }
   }
   return requireds_changed;
 }
 
 Required
-RequiredCmp::required(size_t path_index)
+RequiredCmp::required(int arrival_index)
 {
-  return requireds_[path_index];
+  return requireds_[arrival_index];
 }
 
 ////////////////////////////////////////////////////////////////
@@ -3509,7 +3527,7 @@ void
 RequiredVisitor::visit(Vertex *vertex)
 {
   debugPrint(debug_, "search", 2, "find required %s",
-             vertex->to_string(this).c_str());
+             vertex->name(network_));
   required_cmp_->requiredsInit(vertex, this);
   // Back propagate requireds from fanout.
   visitFanoutPaths(vertex);
@@ -3527,10 +3545,10 @@ RequiredVisitor::visit(Vertex *vertex)
 
 bool
 RequiredVisitor::visitFromToPath(const Pin *,
-				 Vertex * /* from_vertex */,
+				 Vertex *,
 				 const RiseFall *from_rf,
 				 Tag *from_tag,
-				 Path *from_path,
+				 PathVertex *from_path,
                                  const Arrival &,
 				 Edge *edge,
 				 TimingArc *,
@@ -3545,31 +3563,32 @@ RequiredVisitor::visitFromToPath(const Pin *,
   // Don't propagate required times through latch D->Q edges.
   if (edge->role() != TimingRole::latchDtoQ()) {
     debugPrint(debug_, "search", 3, "  %s -> %s %s",
-               from_rf->to_string().c_str(),
-               to_rf->to_string().c_str(),
-               min_max->to_string().c_str());
+               from_rf->asString(),
+               to_rf->asString(),
+               min_max->asString());
     debugPrint(debug_, "search", 3, "  from tag %2u: %s",
                from_tag->index(),
-               from_tag->to_string(this).c_str());
-    size_t path_index = from_path->pathIndex(this);
+               from_tag->asString(this));
+    int arrival_index;
+    bool arrival_exists;
+    from_path->arrivalIndex(arrival_index, arrival_exists);
     const MinMax *req_min = min_max->opposite();
     TagGroup *to_tag_group = search_->tagGroup(to_vertex);
     // Check to see if to_tag was pruned.
     if (to_tag_group && to_tag_group->hasTag(to_tag)) {
-      size_t to_path_index = to_tag_group->pathIndex(to_tag);
-      Path &to_path = to_vertex->paths()[to_path_index];
-      Required &to_required = to_path.required();
+      PathVertex to_path(to_vertex, to_tag, this);
+      Required to_required = to_path.required(this);
       Required from_required = to_required - arc_delay;
       debugPrint(debug_, "search", 3, "  to tag   %2u: %s",
                  to_tag->index(),
-                 to_tag->to_string(this).c_str());
+                 to_tag->asString(this));
       debugPrint(debug_, "search", 3, "  %s - %s = %s %s %s",
                  delayAsString(to_required, this),
                  delayAsString(arc_delay, this),
                  delayAsString(from_required, this),
                  min_max == MinMax::max() ? "<" : ">",
-                 delayAsString(required_cmp_->required(path_index), this));
-      required_cmp_->requiredSet(path_index, from_required, req_min, this);
+                 delayAsString(required_cmp_->required(arrival_index), this));
+      required_cmp_->requiredSet(arrival_index, from_required, req_min, this);
     }
     else {
       if (search_->crprApproxMissingRequireds()) {
@@ -3578,22 +3597,22 @@ RequiredVisitor::visitFromToPath(const Pin *,
 	// as an appromate required.
 	VertexPathIterator to_iter(to_vertex, to_rf, path_ap, this);
 	while (to_iter.hasNext()) {
-	  Path *to_path = to_iter.next();
+	  PathVertex *to_path = to_iter.next();
 	  Tag *to_path_tag = to_path->tag(this);
 	  if (tagMatchNoCrpr(to_path_tag, to_tag)) {
-	    Required to_required = to_path->required();
+	    Required to_required = to_path->required(this);
 	    Required from_required = to_required - arc_delay;
 	    debugPrint(debug_, "search", 3, "  to tag   %2u: %s",
                        to_path_tag->index(),
-                       to_path_tag->to_string(this).c_str());
+                       to_path_tag->asString(this));
 	    debugPrint(debug_, "search", 3, "  %s - %s = %s %s %s",
                        delayAsString(to_required, this),
                        delayAsString(arc_delay, this),
                        delayAsString(from_required, this),
                        min_max == MinMax::max() ? "<" : ">",
-                       delayAsString(required_cmp_->required(path_index),
+                       delayAsString(required_cmp_->required(arrival_index),
                                      this));
-	    required_cmp_->requiredSet(path_index, from_required, req_min, this);
+	    required_cmp_->requiredSet(arrival_index, from_required, req_min, this);
 	    break;
 	  }
 	}
@@ -3613,10 +3632,8 @@ Search::ensureDownstreamClkPins()
     // as having downstream clk pins.
     ClkTreeSearchPred pred(this);
     BfsBkwdIterator iter(BfsIndex::other, &pred, this);
-    for (Vertex *vertex : *graph_->regClkVertices()) {
-      if (!vertex->isConstant())
-        iter.enqueue(vertex);
-    }
+    for (Vertex *vertex : *graph_->regClkVertices())
+      iter.enqueue(vertex);
 
     while (iter.hasNext()) {
       Vertex *vertex = iter.next();
@@ -3659,7 +3676,7 @@ Search::matchesFilter(Path *path,
     // -from clks
     const ClockEdge *path_clk_edge = path->clkEdge(this);
     const Clock *path_clk = path_clk_edge ? path_clk_edge->clock() : nullptr;
-    const RiseFall *path_clk_rf =
+    RiseFall *path_clk_rf =
       path_clk_edge ? path_clk_edge->transition() : nullptr;
     return filter_from_->clks()->hasKey(const_cast<Clock*>(path_clk))
       && filter_from_->transition()->matches(path_clk_rf)
@@ -3771,7 +3788,7 @@ Search::tnsInvalid(Vertex *vertex)
   if ((tns_exists_ || worst_slacks_)
       && isEndpoint(vertex)) {
     debugPrint(debug_, "tns", 2, "tns invalid %s",
-               vertex->to_string(this).c_str());
+               vertex->name(sdc_network_));
     LockGuard lock(tns_lock_);
     invalid_tns_->insert(vertex);
   }
@@ -3785,7 +3802,7 @@ Search::updateInvalidTns()
     // Network edits can change endpointedness since tnsInvalid was called.
     if (isEndpoint(vertex)) {
       debugPrint(debug_, "tns", 2, "update tns %s",
-                 vertex->to_string(this).c_str());
+                 vertex->name(sdc_network_));
       SlackSeq slacks(path_ap_count);
       wnsSlacks(vertex, slacks);
 
@@ -3835,7 +3852,7 @@ Search::tnsIncr(Vertex *vertex,
   if (delayLess(slack, 0.0, this)) {
     debugPrint(debug_, "tns", 3, "tns+ %s %s",
                delayAsString(slack, this),
-               vertex->to_string(this).c_str());
+               vertex->name(sdc_network_));
     tns_[path_ap_index] += slack;
     if (tns_slacks_[path_ap_index].hasKey(vertex))
       report_->critical(1513, "tns incr existing vertex");
@@ -3854,7 +3871,7 @@ Search::tnsDecr(Vertex *vertex,
       && delayLess(slack, 0.0, this)) {
     debugPrint(debug_, "tns", 3, "tns- %s %s",
                delayAsString(slack, this),
-               vertex->to_string(this).c_str());
+               vertex->name(sdc_network_));
     tns_[path_ap_index] -= slack;
     tns_slacks_[path_ap_index].erase(vertex);
   }
@@ -3915,7 +3932,7 @@ Search::wnsTnsPreamble()
     for (auto itr = invalid_requireds_->begin(); itr != invalid_requireds_->end(); ) {
       Vertex *vertex = *itr;
       debugPrint(debug_, "search", 2, "tns update required %s",
-                 vertex->to_string(this).c_str());
+                 vertex->name(sdc_network_));
       if (isEndpoint(vertex)) {
 	seedRequired(vertex);
 	// If the endpoint has fanout it's required time
@@ -3977,8 +3994,8 @@ void
 FindEndSlackVisitor::visit(PathEnd *path_end)
 {
   if (!path_end->isUnconstrained()) {
-    Path *path = path_end->path();
-    PathAPIndex path_ap_index = path->pathAnalysisPtIndex(sta_);
+    PathRef &path = path_end->pathRef();
+    PathAPIndex path_ap_index = path.pathAnalysisPtIndex(sta_);
     Slack slack = path_end->slack(sta_);
     if (delayLess(slack, slacks_[path_ap_index], sta_))
       slacks_[path_ap_index] = slack;

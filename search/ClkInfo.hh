@@ -26,12 +26,12 @@
 
 #include "Transition.hh"
 #include "SearchClass.hh"
+#include "PathVertexPtr.hh"
 #include "Sdc.hh"
-#include "Path.hh"
 
 namespace sta {
 
-class Path;
+class PathVertex;
 
 class ClkInfo
 {
@@ -46,17 +46,17 @@ public:
 	  float latency,
 	  ClockUncertainties *uncertainties,
           PathAPIndex path_ap_index,
-	  Path *crpr_clk_path,
+	  PathVertexPtr &crpr_clk_path,
 	  const StaState *sta);
   ~ClkInfo();
-  std::string to_string(const StaState *sta) const;
+  const char *asString(const StaState *sta) const;
   const ClockEdge *clkEdge() const { return clk_edge_; }
   const Clock *clock() const;
   const Pin *clkSrc() const { return clk_src_; }
   bool isPropagated() const { return is_propagated_; }
   const Pin *genClkSrc() const { return gen_clk_src_; }
   bool isPulseClk() const { return is_pulse_clk_; }
-  const RiseFall *pulseClkSense() const;
+  RiseFall *pulseClkSense() const;
   int pulseClkSenseTrIndex() const { return pulse_clk_sense_; }
   float latency() const { return latency_; }
   Arrival &insertion() { return insertion_; }
@@ -65,9 +65,9 @@ public:
   PathAPIndex pathAPIndex() const { return path_ap_index_; }
   // Clock path used for crpr resolution.
   // Null for clocks because the path cannot point to itself.
-  Path *crprClkPath(const StaState *sta);
-  const Path *crprClkPath(const StaState *sta) const;
-  VertexId crprClkVertexId(const StaState *sta) const;
+  PathVertexPtr &crprClkPath() { return crpr_clk_path_; }
+  const PathVertexPtr &crprClkPath() const { return crpr_clk_path_; }
+  VertexId crprClkVertexId() const;
   bool hasCrprClkPin() const { return !crpr_clk_path_.isNull(); }
   bool refsFilter(const StaState *sta) const;
   // This clk_info/tag is used for a generated clock source path.
@@ -81,7 +81,7 @@ private:
   const ClockEdge *clk_edge_;
   const Pin *clk_src_;
   const Pin *gen_clk_src_;
-  Path crpr_clk_path_;
+  PathVertexPtr crpr_clk_path_;
   ClockUncertainties *uncertainties_;
   Arrival insertion_;
   float latency_;
@@ -92,15 +92,6 @@ private:
   unsigned int pulse_clk_sense_:RiseFall::index_bit_count;
   unsigned int path_ap_index_:path_ap_index_bit_count;
 };
-
-int
-clkInfoCmp(const ClkInfo *clk_info1,
-	   const ClkInfo *clk_info2,
-	   const StaState *sta);
-bool
-clkInfoEqual(const ClkInfo *clk_info1,
-	     const ClkInfo *clk_info2,
-	     const StaState *sta);
 
 class ClkInfoLess
 {

@@ -34,6 +34,8 @@
 
 namespace sta {
 
+using std::string;
+
 class Sta;
 
 // Adding a new property type
@@ -53,10 +55,10 @@ public:
 	      type_library, type_cell, type_port,
 	      type_liberty_library, type_liberty_cell, type_liberty_port,
 	      type_instance, type_pin, type_pins, type_net,
-	      type_clk, type_clks, type_paths, type_pwr_activity };
+	      type_clk, type_clks, type_path_refs, type_pwr_activity };
   PropertyValue();
   PropertyValue(const char *value);
-  PropertyValue(std::string &value);
+  PropertyValue(string &value);
   PropertyValue(float value,
                 const Unit *unit);
   explicit PropertyValue(bool value);
@@ -75,7 +77,7 @@ public:
   PropertyValue(const Clock *value);
   PropertyValue(ClockSeq *value);
   PropertyValue(ClockSet *value);
-  PropertyValue(ConstPathSeq *value);
+  PropertyValue(PathRefSeq *value);
   PropertyValue(PwrActivity *value);
   // Copy constructor.
   PropertyValue(const PropertyValue &props);
@@ -85,7 +87,7 @@ public:
   Type type() const { return type_; }
   const Unit *unit() const { return unit_; }
 
-  std::string to_string(const Network *network) const;
+  const char *asString(const Network *network) const;
   const char *stringValue() const; // valid for type string
   float floatValue() const;        // valid for type float
   bool boolValue() const;          // valid for type bool
@@ -101,7 +103,7 @@ public:
   const Net *net() const { return net_; }
   const Clock *clock() const { return clk_; }
   ClockSeq *clocks() const { return clks_; }
-  ConstPathSeq *paths() const { return paths_; }
+  PathRefSeq *pathRefs() const { return path_refs_; }
   PwrActivity pwrActivity() const { return pwr_activity_; }
 
   // Copy assignment.
@@ -127,7 +129,7 @@ private:
     const Net *net_;
     const Clock *clk_;
     ClockSeq *clks_;
-    ConstPathSeq *paths_;
+    PathRefSeq *path_refs_;
     PwrActivity pwr_activity_;
   };
   const Unit *unit_;
@@ -194,7 +196,7 @@ getProperty(PathEnd *end,
 	    Sta *sta);
 
 PropertyValue
-getProperty(Path *end,
+getProperty(PathRef *end,
 	    const char *property,
 	    Sta *sta);
 

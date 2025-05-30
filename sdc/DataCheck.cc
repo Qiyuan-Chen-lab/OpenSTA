@@ -80,7 +80,7 @@ DataCheck::empty() const
 }
 
 void
-DataCheck::marginIsOneValue(const SetupHold *setup_hold,
+DataCheck::marginIsOneValue(SetupHold *setup_hold,
 			    // Return values.
 			    float &value,
 			    bool &one_value) const

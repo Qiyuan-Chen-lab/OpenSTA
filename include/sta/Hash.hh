@@ -29,6 +29,8 @@
 
 namespace sta {
 
+using std::size_t;
+
 const size_t hash_init_value = 5381;
 
 // Dan Bernstein, comp.lang.c.

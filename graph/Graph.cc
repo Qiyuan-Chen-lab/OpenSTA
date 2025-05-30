@@ -38,8 +38,6 @@
 
 namespace sta {
 
-using std::string;
-
 ////////////////////////////////////////////////////////////////
 //
 // Graph
@@ -208,7 +206,7 @@ Graph::makePortInstanceEdges(const Instance *inst,
 	// Vertices can be missing from the graph if the pins
 	// are power or ground.
 	if (from_vertex) {
-          const TimingRole *role = arc_set->role();
+          TimingRole *role = arc_set->role();
   	  bool is_check = role->isTimingCheckBetween();
 	  if (to_bidirect_drvr_vertex && !is_check)
 	    makeEdge(from_vertex, to_bidirect_drvr_vertex, arc_set);
@@ -573,25 +571,75 @@ Graph::gateEdgeArc(const Pin *in_pin,
 
 ////////////////////////////////////////////////////////////////
 
-Path *
-Graph::makePaths(Vertex *vertex,
-                 uint32_t count)
+Arrival *
+Graph::makeArrivals(Vertex *vertex,
+                    uint32_t count)
 {
-  Path *paths = new Path[count];
-  vertex->setPaths(paths);
-  return paths;
+  Arrival *arrivals = new Arrival[count];
+  vertex->setArrivals(arrivals);
+  return arrivals;
 }
 
-Path *
-Graph::paths(const Vertex *vertex) const
+Arrival *
+Graph::arrivals(const Vertex *vertex) const
 {
-  return vertex->paths();
+  return vertex->arrivals();
+}
+
+void
+Graph::deleteArrivals(Vertex *vertex)
+{
+  vertex->setArrivals(nullptr);
+}
+
+Required *
+Graph::requireds(const Vertex *vertex) const
+{
+  return vertex->requireds();
+}
+
+Required *
+Graph::makeRequireds(Vertex *vertex,
+                     uint32_t count)
+{
+  Required *requireds = new Arrival[count];
+  vertex->setRequireds(requireds);
+  return requireds;
+}
+
+void
+Graph::deleteRequireds(Vertex *vertex)
+{
+  vertex->setRequireds(nullptr);
+}
+
+PathPrev *
+Graph::prevPaths(const Vertex *vertex) const
+{
+  return vertex->prevPaths();
+}
+
+PathPrev *
+Graph::makePrevPaths(Vertex *vertex,
+                     uint32_t count)
+{
+  PathPrev *prev_paths = new PathPrev[count];
+  vertex->setPrevPaths(prev_paths);
+  return prev_paths;
+}
+
+void
+Graph::deletePrevPaths(Vertex *vertex)
+{
+  vertex->setPrevPaths(nullptr);
 }
 
 void
 Graph::deletePaths(Vertex *vertex)
 {
-  vertex->setPaths(nullptr);
+  deleteArrivals(vertex);
+  deleteRequireds(vertex);
+  deletePrevPaths(vertex);
   vertex->tag_group_index_ = tag_group_index_max;
   vertex->crpr_path_pruning_disabled_ = false;
 }
@@ -959,7 +1007,9 @@ Vertex::init(Pin *pin,
   in_edges_ = edge_id_null;
   out_edges_ = edge_id_null;
   slews_ = nullptr;
-  paths_ = nullptr;
+  arrivals_ = nullptr;
+  requireds_ = nullptr;
+  prev_paths_ = nullptr;
   tag_group_index_ = tag_group_index_max;
   slew_annotated_ = false;
   sim_value_ = unsigned(LogicValue::unknown);
@@ -969,9 +1019,8 @@ Vertex::init(Pin *pin,
   is_check_clk_ = false;
   is_constrained_ = false;
   has_downstream_clk_pin_ = false;
+  color_ = unsigned(LevelColor::white);
   level_ = 0;
-  visited1_ = false;
-  visited2_ = false;
   bfs_in_queue_ = 0;
   crpr_path_pruning_disabled_ = false;
 }
@@ -986,8 +1035,12 @@ Vertex::clear()
 {
   delete [] slews_;
   slews_ = nullptr;
-  delete [] paths_;
-  paths_ = nullptr;
+  delete [] arrivals_;
+  arrivals_ = nullptr;
+  delete [] requireds_;
+  requireds_ = nullptr;
+  delete [] prev_paths_;
+  prev_paths_ = nullptr;
 }
 
 void
@@ -996,25 +1049,17 @@ Vertex::setObjectIdx(ObjectIdx idx)
   object_idx_ = idx;
 }
 
-string
-Vertex::to_string(const StaState *sta) const
-{
-  const Network *network = sta->network();
-  if (network->direction(pin_)->isBidirect()) {
-    string str = network->pathName(pin_);
-    str += ' ';
-    str += is_bidirect_drvr_ ? "driver" : "load";
-    return str;
-  }
-  else
-    return network->pathName(pin_);
-}
-
 const char *
 Vertex::name(const Network *network) const
 {
-  string name = to_string(network);
-  return makeTmpString(name);  
+  if (network->direction(pin_)->isBidirect()) {
+    const char *pin_name = network->pathName(pin_);
+    return stringPrintTmp("%s %s",
+			  pin_name,
+			  is_bidirect_drvr_ ? "driver" : "load");
+  }
+  else
+    return network->pathName(pin_);
 }
 
 bool
@@ -1041,15 +1086,9 @@ Vertex::setLevel(Level level)
 }
 
 void
-Vertex::setVisited(bool visited)
+Vertex::setColor(LevelColor color)
 {
-  visited1_ = visited;
-}
-
-void
-Vertex::setVisited2(bool visited)
-{
-  visited2_ = visited;
+  color_ = unsigned(color);
 }
 
 void
@@ -1114,10 +1153,24 @@ Vertex::setTagGroupIndex(TagGroupIndex tag_index)
 }
 
 void
-Vertex::setPaths(Path *paths)
+Vertex::setArrivals(Arrival *arrivals)
 {
-  delete [] paths_;
-  paths_ = paths;
+  delete [] arrivals_;
+  arrivals_ = arrivals;
+}
+
+void
+Vertex::setRequireds(Required *requireds)
+{
+  delete [] requireds_;
+  requireds_ = requireds;
+}
+
+void
+Vertex::setPrevPaths(PathPrev *prev_paths)
+{
+  delete [] prev_paths_;
+  prev_paths_ = prev_paths;
 }
 
 LogicValue
@@ -1262,16 +1315,6 @@ Edge::setObjectIdx(ObjectIdx idx)
   object_idx_ = idx;
 }
 
-string
-Edge::to_string(const StaState *sta) const
-{
-  const Graph *graph = sta->graph();
-  string str = from(graph)->to_string(sta);
-  str += " -> ";
-  str += to(graph)->to_string(sta);
-  return str;
-}
-
 void
 Edge::setTimingArcSet(TimingArcSet *set)
 {
@@ -1307,8 +1350,7 @@ Edge::setArcDelayAnnotated(const TimingArc *arc,
   if (index > sizeof(intptr_t) * 8
       && arc_delay_annotated_is_bits_) {
     arc_delay_annotated_is_bits_ = false;
-    size_t bit_count = ap_count * RiseFall::index_count * 2;
-    arc_delay_annotated_.seq_ = new std::vector<bool>(bit_count);
+    arc_delay_annotated_.seq_ = new vector<bool>(ap_count * RiseFall::index_count * 2);
   }
   if (arc_delay_annotated_is_bits_) {
     if (annotated)
@@ -1338,7 +1380,7 @@ Edge::setDelayAnnotationIsIncremental(bool is_incr)
   delay_annotation_is_incremental_ = is_incr;
 }
 
-const TimingRole *
+TimingRole *
 Edge::role() const
 {
   return arc_set_->role();
@@ -1372,7 +1414,7 @@ Edge::setSimTimingSense(TimingSense sense)
 bool
 Edge::isDisabledConstraint() const
 {
-  const TimingRole *role = arc_set_->role();
+  TimingRole *role = arc_set_->role();
   bool is_wire = role->isWire();
   return is_disabled_constraint_
     || arc_set_->isDisabledConstraint()

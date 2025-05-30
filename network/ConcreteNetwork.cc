@@ -33,8 +33,6 @@
 
 namespace sta {
 
-using std::string;
-
 static void
 makeChildNetwork(Instance *proto,
 		 Instance *parent,

@@ -37,8 +37,6 @@
 
 namespace sta {
 
-using std::string;
-
 static bool
 thrusIntersectPts(ExceptionThruSeq *thrus1,
 		  ExceptionThruSeq *thrus2,
@@ -322,7 +320,7 @@ ExceptionPath::fromThruToString(const Network *network) const
   string str;
   if (min_max_ != MinMaxAll::all()) {
     str += " -";
-    str += min_max_->to_string();
+    str += min_max_->asString();
   }
 
   if (from_)

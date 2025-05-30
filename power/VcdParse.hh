@@ -33,8 +33,11 @@
 
 namespace sta {
 
+using std::string;
+using std::vector;
+
 typedef int64_t VcdTime;
-typedef std::vector<std::string> VcdScope;
+typedef vector<string> VcdScope;
 
 enum class VcdVarType {
   wire,
@@ -68,19 +71,19 @@ public:
 
 private:
   void parseTimescale();
-  void setTimeUnit(const std::string &time_unit,
+  void setTimeUnit(const string &time_unit,
                    double time_scale);
   void parseVar();
   void parseScope();
   void parseUpscope();
   void parseVarValues();
-  std::string getToken();
-  std::string readStmtString();
-  std::vector<std::string> readStmtTokens();
+  string getToken();
+  string readStmtString();
+  vector<string> readStmtTokens();
 
   VcdReader *reader_;
   gzFile stream_;
-  std::string token_;
+  string token_;
   const char *filename_;
   int file_line_;
   int stmt_line_;
@@ -98,24 +101,24 @@ class VcdReader
 {
 public:
   virtual ~VcdReader() {}
-  virtual void setDate(const std::string &date) = 0;
-  virtual void setComment(const std::string &comment) = 0;
-  virtual void setVersion(const std::string &version) = 0;
-  virtual void setTimeUnit(const std::string &time_unit,
+  virtual void setDate(const string &date) = 0;
+  virtual void setComment(const string &comment) = 0;
+  virtual void setVersion(const string &version) = 0;
+  virtual void setTimeUnit(const string &time_unit,
                            double time_unit_scale,
                            double time_scale) = 0;
   virtual void setTimeMax(VcdTime time_max) = 0;
   virtual void varMinDeltaTime(VcdTime min_delta_time) = 0;
-  virtual bool varIdValid(const std::string &id) = 0;
+  virtual bool varIdValid(const string &id) = 0;
   virtual void makeVar(const VcdScope &scope,
-                       const std::string &name,
+                       const string &name,
                        VcdVarType type,
                        size_t width,
-                       const std::string &id) = 0;
-  virtual void varAppendValue(const std::string &id,
+                       const string &id) = 0;
+  virtual void varAppendValue(const string &id,
                               VcdTime time,
                               char value) = 0;
-  virtual void varAppendBusValue(const std::string &id,
+  virtual void varAppendBusValue(const string &id,
                                  VcdTime time,
                                  int64_t bus_value) = 0;
 };

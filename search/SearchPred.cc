@@ -33,7 +33,6 @@
 #include "Levelize.hh"
 #include "Search.hh"
 #include "Latches.hh"
-#include "Variables.hh"
 
 namespace sta {
 
@@ -60,20 +59,19 @@ SearchPred0::searchThru(Edge *edge)
 {
   const TimingRole *role = edge->role();
   const Sdc *sdc = sta_->sdc();
-  const Variables *variables = sta_->variables();
   return !(edge->isDisabledConstraint()
 	   // Constants disable edge cond expression.
 	   || edge->isDisabledCond()
 	   || sdc->isDisabledCondDefault(edge)
 	   // Register/latch preset/clr edges are disabled by default.
 	   || (role == TimingRole::regSetClr()
-	       && !variables->presetClrArcsEnabled())
+	       && !sdc->presetClrArcsEnabled())
 	   // Constants on other pins disable this edge (ie, a mux select).
 	   || edge->simTimingSense() == TimingSense::none
 	   || (edge->isBidirectInstPath()
-	       && !variables->bidirectInstPathsEnabled())
+	       && !sdc->bidirectInstPathsEnabled())
 	   || (edge->isBidirectNetPath()
-	       && !variables->bidirectNetPathsEnabled())
+	       && !sdc->bidirectNetPathsEnabled())
 	   || (role == TimingRole::latchDtoQ()
 	       && sta_->latches()->latchDtoQState(edge)
 	       == LatchEnableState::closed));
@@ -154,11 +152,12 @@ ClkTreeSearchPred::ClkTreeSearchPred(const StaState *sta) :
 bool
 ClkTreeSearchPred::searchThru(Edge *edge)
 {
+  const Sdc *sdc = sta_->sdc();
   // Propagate clocks through constants.
   const TimingRole *role = edge->role();
   return (role->isWire()
 	  || role == TimingRole::combinational())
-    && (sta_->variables()->clkThruTristateEnabled()
+    && (sdc->clkThruTristateEnabled()
 	|| !(role == TimingRole::tristateEnable()
 	     || role == TimingRole::tristateDisable()))
     && SearchPred1::searchThru(edge);
@@ -185,8 +184,8 @@ searchThru(const Edge *edge,
 	   const TimingArc *arc,
 	   const Graph *graph)
 {
-  const RiseFall *from_rf = arc->fromEdge()->asRiseFall();
-  const RiseFall *to_rf = arc->toEdge()->asRiseFall();
+  RiseFall *from_rf = arc->fromEdge()->asRiseFall();
+  RiseFall *to_rf = arc->toEdge()->asRiseFall();
   // Ignore transitions other than rise/fall.
   return from_rf && to_rf
     && searchThru(edge->from(graph), from_rf, edge, edge->to(graph), to_rf);

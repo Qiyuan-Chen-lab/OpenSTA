@@ -24,8 +24,6 @@
 
 #pragma once
 
-#include <string>
-
 #include "Set.hh"
 #include "NetworkClass.hh"
 #include "LibertyClass.hh"
@@ -77,7 +75,7 @@ public:
   TimingSense portTimingSense(const LibertyPort *port) const;
   // Return true if expression has port as an input.
   bool hasPort(const LibertyPort *port) const;
-  std::string to_string() const;
+  const char *asString() const;
   // Sub expression for a bus function (bit_offset is 0 to bus->size()-1).
   FuncExpr *bitSubExpr(int bit_offset);
   // Check to make sure the function and port size are compatible.
@@ -86,9 +84,9 @@ public:
   bool checkSize(LibertyPort *port);
 
 private:
-  std::string to_string(bool with_parens) const;
-  std::string to_string(bool with_parens,
-                        char op) const;
+  const char *asString(bool with_parens) const;
+  const char *asStringSubexpr(bool with_parens,
+			      char op) const;
 
   Operator op_;
   FuncExpr *left_;

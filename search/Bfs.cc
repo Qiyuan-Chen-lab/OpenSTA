@@ -89,7 +89,7 @@ BfsIterator::clear()
 }
 
 void
-BfsIterator::reportEntries()
+BfsIterator::reportEntries(const Network *network)
 {
   Level level = first_level_;
   while (levelLessOrEqual(level, last_level_)) {
@@ -98,7 +98,7 @@ BfsIterator::reportEntries()
       report_->reportLine("Level %d", level);
       for (Vertex *vertex : level_vertices) {
 	if (vertex)
-	  report_->reportLine(" %s", vertex->to_string(this).c_str());
+	  report_->reportLine(" %s", vertex->name(network));
       }
     }
     incrLevel(level);
@@ -217,7 +217,6 @@ BfsIterator::visitParallel(Level to_level,
           }
 	  visitor->levelFinished();
 	  level_vertices.clear();
-          visit_count += vertex_count;
 	}
       }
       for (VertexVisitor *visitor : visitors)
@@ -263,8 +262,7 @@ BfsIterator::findNext(Level to_level)
 void
 BfsIterator::enqueue(Vertex *vertex)
 {
-  debugPrint(debug_, "bfs", 2, "enqueue %s",
-             vertex->to_string(this).c_str());
+  debugPrint(debug_, "bfs", 2, "enqueue %s", vertex->name(sdc_network_));
   if (!vertex->bfsInQueue(bfs_index_)) {
     Level level = vertex->level();
     LockGuard lock(queue_lock_);
@@ -297,12 +295,12 @@ BfsIterator::checkInQueue(Vertex *vertex)
 	if (vertex->bfsInQueue(bfs_index_))
 	  return;
 	else
-	  printf("extra %s\n", vertex->to_string(this).c_str());
+	  printf("extra %s\n", vertex->name(sdc_network_));
       }
     }
   }
   if (vertex->bfsInQueue(bfs_index_))
-    printf("missing %s\n", vertex->to_string(this).c_str());
+    printf("missing %s\n", vertex->name(sdc_network_));
 }
 
 void

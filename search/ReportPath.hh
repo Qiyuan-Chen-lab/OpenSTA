@@ -37,6 +37,8 @@ class DcalcAnalysisPt;
 class PathExpanded;
 class ReportField;
 
+using std::string;
+
 typedef Vector<ReportField*> ReportFieldSeq;
 
 class ReportPath : public StaState
@@ -100,12 +102,12 @@ public:
                   const char *path_name,
                   int indent,
                   bool trailing_comma,
-                  std::string &result) const;
+                  string &result) const;
   void reportJson(const PathExpanded &expanded,
                   const char *path_name,
                   int indent,
                   bool trailing_comma,
-                  std::string &result) const;
+                  string &result) const;
 
   void reportEndHeader() const;
   void reportEndLine(const PathEnd *end) const;
@@ -187,17 +189,17 @@ protected:
   void reportEndpointOutputDelay(const PathEndClkConstrained *end) const;
   void reportEndpoint(const PathEndPathDelay *end) const;
   void reportEndpoint(const PathEndGatedClock *end) const;
-  std::string pathEndpoint(const PathEnd *end) const;
-  std::string pathStartpoint(const PathEnd *end,
-                             const PathExpanded &expanded) const;
+  string pathEndpoint(const PathEnd *end) const;
+  string pathStartpoint(const PathEnd *end,
+			const PathExpanded &expanded) const;
   void reportBorrowing(const PathEndLatchCheck *end,
 		       Arrival &borrow,
 		       Arrival &time_given_to_startpoint) const;
   void reportEndpoint(const PathEndDataCheck *end) const;
   const char *clkNetworkDelayIdealProp(bool is_ideal) const;
 
-  std::string checkRoleReason(const PathEnd *end) const;
-  std::string checkRoleString(const PathEnd *end) const;
+  string checkRoleReason(const PathEnd *end) const;
+  string checkRoleString(const PathEnd *end) const;
   virtual void reportGroup(const PathEnd *end) const;
   void reportStartpoint(const PathEnd *end,
 			const PathExpanded &expanded) const;
@@ -207,13 +209,13 @@ protected:
   void reportEndpoint(const PathEndLatchCheck *end) const;
   const char *latchDesc(const PathEndLatchCheck *end) const;
   void reportStartpoint(const char *start,
-			const std::string reason) const;
+			const string reason) const;
   void reportEndpoint(const char *end,
-		      const std::string reason) const;
+		      const string reason) const;
   void reportStartEndPoint(const char *pt,
-			   const std::string reason,
+			   const string reason,
 			   const char *key) const;
-  std::string tgtClkName(const PathEnd *end) const;
+  string tgtClkName(const PathEnd *end) const;
   const char *clkRegLatchDesc(const PathEnd *end) const;
   void reportSrcPath(const PathEnd *end,
 		     const PathExpanded &expanded) const;
@@ -283,13 +285,13 @@ protected:
 		     Arrival clk_time,
 		     const MinMax *min_max) const ;
   void reportRequired(const PathEnd *end,
-		      std::string margin_msg) const ;
+		      string margin_msg) const ;
   void reportSlack(const PathEnd *end) const ;
   void reportSlack(Slack slack) const ;
   void reportSpaceSlack(const PathEnd *end,
-                        std::string &line) const ;
+                        string &line) const ;
   void reportSpaceSlack(Slack slack,
-                        std::string &line) const ;
+                        string &line) const ;
   void reportSrcPathArrival(const PathEnd *end,
 			    const PathExpanded &expanded) const ;
   void reportPath(const PathEnd *end,
@@ -324,7 +326,8 @@ protected:
 		   bool report_clk_path,
 		   Arrival prev_time,
 		   float time_offset) const;
-  void reportHierPinsThru(const Path *path) const;
+  void reportHierPinsThru(const Path *path,
+                          const TimingArc *prev_arc) const;
   void reportInputExternalDelay(const Path *path,
 				float time_offset) const;
   void reportLine(const char *what,
@@ -360,7 +363,7 @@ protected:
 		  bool total_with_minus,
 		  const EarlyLate *early_late,
 		  const RiseFall *rf,
-		  std::string src_attr,
+		  string src_attr,
 		  const char *line_case) const;
   void reportLineTotal(const char *what,
 		       Delay incr,
@@ -374,47 +377,47 @@ protected:
 			const EarlyLate *early_late) const;
   void reportDashLineTotal() const;
   void reportDescription(const char *what,
-                         std::string &result) const;
+                         string &result) const;
   void reportDescription(const char *what,
 			 bool first_field,
 			 bool last_field,
-                         std::string &result) const;
+                         string &result) const;
   void reportFieldTime(float value,
 		       ReportField *field,
-		       std::string &result) const;
+		       string &result) const;
   void reportSpaceFieldTime(float value,
-			    std::string &result) const;
+			    string &result) const;
   void reportSpaceFieldDelay(Delay value,
 			     const EarlyLate *early_late,
-			     std::string &result) const;
+			     string &result) const;
   void reportFieldDelayMinus(Delay value,
 			     const EarlyLate *early_late,
 			     const ReportField *field,
-			     std::string &result) const;
+			     string &result) const;
   void reportTotalDelay(Delay value,
 			const EarlyLate *early_late,
-			std::string &result) const;
+			string &result) const;
   void reportFieldDelay(Delay value,
 			const EarlyLate *early_late,
 			const ReportField *field,
-			std::string &result) const;
+			string &result) const;
   void reportField(float value,
 		   const ReportField *field,
-		   std::string &result) const;
+		   string &result) const;
   void reportField(const char *value,
 		   const ReportField *field,
-		   std::string &result) const;
+		   string &result) const;
   void reportFieldBlank(const ReportField *field,
-			std::string &result) const;
+			string &result) const;
   void reportDashLine() const;
   void reportDashLine(int line_width) const;
   void reportBlankLine() const;
-  std::string descriptionField(const Vertex *vertex) const;
-  std::string descriptionField(const Pin *pin) const;
-  std::string descriptionNet(const Pin *pin) const;
+  string descriptionField(const Vertex *vertex) const;
+  string descriptionField(const Pin *pin) const;
+  string descriptionNet(const Pin *pin) const;
   bool reportClkPath() const;
-  std::string clkName(const Clock *clk,
-                      bool inverted) const;
+  string clkName(const Clock *clk,
+		 bool inverted) const;
   bool hasExtInputDriver(const Pin *pin,
 			 const RiseFall *rf,
 			 const MinMax *min_max) const;
@@ -423,7 +426,7 @@ protected:
 		   const MinMax *min_max) const;
   const char *mpwCheckHiLow(const MinPulseWidthCheck *check) const;
   void reportSkewClkPath(const char *arrival_msg,
-			 const Path *clk_path) const;
+			 const PathVertex *clk_path) const;
   const char *edgeRegLatchDesc(const Edge *edge,
 			       const TimingArc *arc) const;
   const char *checkRegLatchDesc(const TimingRole *role,
@@ -431,7 +434,7 @@ protected:
   const char *regDesc(const RiseFall *clk_rf) const;
   const char *latchDesc(const RiseFall *clk_rf) const;
   void pathClkPath(const Path *path,
-		   const Path &clk_path) const;
+		   const PathRef &clk_path) const;
   bool isPropagated(const Path *clk_path) const;
   bool isPropagated(const Path *clk_path,
 		    const Clock *clk) const;
@@ -440,10 +443,10 @@ protected:
 		      const Pin *start_pin) const;
   void latchPaths(const Path *path,
                   // Return values.
-                  Path &d_path,
-		  Path &q_path,
+                  PathRef &d_path,
+		  PathRef &q_path,
 		  Edge *&d_q_edge) const;
-  bool nextArcAnnotated(const Path *next_path,
+  bool nextArcAnnotated(const PathRef *next_path,
 			size_t next_index,
 			const PathExpanded &expanded,
 			DcalcAPIndex ap_index) const;
@@ -455,7 +458,7 @@ protected:
   void pathInputDelayRefPath(const Path *path,
 			     const InputDelay *input_delay,
 			     // Return value.
-			     Path &ref_path) const;
+			     PathRef &ref_path) const;
   const char *asRisingFalling(const RiseFall *rf) const;
   const char *asRiseFall(const RiseFall *rf) const;
   Delay delayIncr(Delay time,

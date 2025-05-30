@@ -37,7 +37,6 @@
 namespace sta {
 
 using std::max;
-using std::string;
 
 static void
 stringPrintTmp(const char *fmt,
@@ -219,14 +218,6 @@ makeTmpString(size_t length)
   }
   tmp_string_next++;
   return tmp_str;
-}
-
-char *
-makeTmpString(string &str)
-{
-  char *tmp = makeTmpString(str.length() + 1);
-  strcpy(tmp, str.c_str());
-  return tmp;
 }
 
 void

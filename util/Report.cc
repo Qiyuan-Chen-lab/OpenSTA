@@ -111,7 +111,7 @@ Report::reportLineString(const char *line)
 }
 
 void
-Report::reportLineString(const std::string &line)
+Report::reportLineString(const string &line)
 {
   printLine(line.c_str(), line.length());
 }
@@ -304,7 +304,6 @@ Report::critical(int /* id */,
   printToBufferAppend(fmt, args);
   printBufferLine();
   va_end(args);
-  exit(1);
 }
 
 void

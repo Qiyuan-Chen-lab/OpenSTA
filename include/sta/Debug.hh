@@ -25,7 +25,6 @@
 #pragma once
 
 #include <cstdarg>
-#include <mutex>
 
 #include "Map.hh"
 #include "StringUtil.hh"
@@ -50,12 +49,11 @@ public:
   int statsLevel() const { return stats_level_; }
   void reportLine(const char *what,
                   const char *fmt,
-                  ...)
+                  ...) const
     __attribute__((format (printf, 3, 4)));
 
 protected:
   Report *report_;
-  std::mutex buffer_lock_;
   bool debug_on_;
   DebugMap *debug_map_;
   int stats_level_;

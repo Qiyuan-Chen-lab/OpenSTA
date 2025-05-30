@@ -8,10 +8,14 @@ find_library(CUDD_LIB
   PATHS ${CUDD_DIR}
   PATH_SUFFIXES lib lib/cudd cudd/.libs
   )
+# set(CUDD_LIB "/home/24qyc/.local/lib/libcudd.a")
+# set(CUDD_INCLUDE_DIR "/home/24qyc/.local/include")
+
 if (CUDD_LIB)
   message(STATUS "CUDD library: ${CUDD_LIB}")
   get_filename_component(CUDD_LIB_DIR "${CUDD_LIB}" PATH)
   get_filename_component(CUDD_LIB_PARENT1 "${CUDD_LIB_DIR}" PATH)
+  message(STATUS "CUDD library parent: ${CUDD_LIB_PARENT1}")
   find_file(CUDD_HEADER cudd.h
     PATHS ${CUDD_LIB_PARENT1} ${CUDD_LIB_PARENT1}/include ${CUDD_LIB_PARENT1}/include/cudd)
   if (CUDD_HEADER)

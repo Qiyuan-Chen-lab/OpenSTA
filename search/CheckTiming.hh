@@ -72,7 +72,7 @@ protected:
 		     ClockSet &clks);
   void errorMsgSubst(const char *msg,
 		     int count,
-		     std::string &error_msg);
+		     string &error_msg);
 
   CheckErrorSeq errors_;
 };

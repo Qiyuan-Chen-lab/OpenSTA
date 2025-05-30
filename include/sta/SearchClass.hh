@@ -41,6 +41,12 @@ namespace sta {
 class Search;
 class Corner;
 class Path;
+class PathRep;
+class PathVertex;
+class PathPrev;
+class PathVertexPtr;
+class PathRef;
+class PathEnumed;
 class PathEnd;
 class PathGroup;
 class Tag;
@@ -114,12 +120,12 @@ typedef Vector<MaxSkewCheck*> MaxSkewCheckSeq;
 typedef StringSet PathGroupNameSet;
 typedef Vector<PathEnd*> PathEndSeq;
 typedef Vector<Arrival> ArrivalSeq;
-typedef Map<Vertex*, size_t> VertexPathCountMap;
-typedef Map<Tag*, size_t, TagMatchLess> PathIndexMap;
+typedef Map<Vertex*, int> VertexPathCountMap;
+typedef UnorderedMap<Tag*, int, TagMatchHash, TagMatchEqual> ArrivalMap;
+typedef Vector<PathVertex> PathVertexSeq;
 typedef Vector<Slack> SlackSeq;
 typedef Delay Crpr;
-typedef Vector<Path*> PathSeq;
-typedef std::vector<const Path*> ConstPathSeq;
+typedef Vector<PathRef> PathRefSeq;
 
 enum class ReportPathFormat { full,
 			      full_clock,

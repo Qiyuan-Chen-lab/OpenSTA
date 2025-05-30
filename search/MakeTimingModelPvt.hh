@@ -108,7 +108,7 @@ private:
   const Corner *corner_;
   LibertyLibrary *library_;
   LibertyCell *cell_;
-  const MinMax *min_max_;
+  MinMax *min_max_;
   LibertyBuilder *lib_builder_;
   // Output driver table model template to model template.
   Map<const TableTemplate*, TableTemplate*> template_map_;

@@ -42,7 +42,7 @@
 
 void
 sta::VerilogParse::error(const location_type &loc,
-                         const std::string &msg)
+                         const string &msg)
 {
   reader->report()->fileError(164,reader->filename(),loc.begin.line,
                               "%s",msg.c_str());
@@ -521,7 +521,7 @@ attr_spec_value:
 | 	STRING
 	{ $$ = $1; }
 | 	INT
-  	{ $$ = new std::string(std::to_string($1)); }
+  	{ $$ = new string(std::to_string($1)); }
 	;
 
 %%

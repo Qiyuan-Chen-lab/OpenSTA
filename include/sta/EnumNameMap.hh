@@ -29,27 +29,32 @@
 
 namespace sta {
 
+using std::string;
+using std::map;
+using std::initializer_list;
+using std::pair;
+
 // Helper for mapping enum values to strings and back.
 template <class ENUM>
 class EnumNameMap
 {
 public:
-  EnumNameMap(std::initializer_list<std::pair<const ENUM, std::string>> enum_names);
+  EnumNameMap(initializer_list<pair<const ENUM, string>> enum_names);
   const char *find(ENUM key) const;
-  ENUM find(std::string name,
+  ENUM find(string name,
 	    ENUM unknown_key) const;
-  void find(std::string name,
+  void find(string name,
 	    // Return values.
 	    ENUM &key,
 	    bool &exists) const;
   
 private:
-  std::map<ENUM, std::string> enum_map_;
-  std::map<std::string, ENUM> name_map_;
+  map<ENUM, string> enum_map_;
+  map<string, ENUM> name_map_;
 };
 
 template <class ENUM>
-EnumNameMap<ENUM>::EnumNameMap(std::initializer_list<std::pair<const ENUM,std::string>> enum_names) :
+EnumNameMap<ENUM>::EnumNameMap(initializer_list<pair<const ENUM, string>> enum_names) :
   enum_map_(enum_names)
 {
   for (const auto& [key, name] : enum_map_)
@@ -69,7 +74,7 @@ EnumNameMap<ENUM>::find(ENUM key) const
 
 template <class ENUM>
 void
-EnumNameMap<ENUM>::find(std::string name,
+EnumNameMap<ENUM>::find(string name,
 			// Return values.
 			ENUM &key,
 			bool &exists) const
@@ -85,7 +90,7 @@ EnumNameMap<ENUM>::find(std::string name,
 
 template <class ENUM>
 ENUM
-EnumNameMap<ENUM>::find(std::string name,
+EnumNameMap<ENUM>::find(string name,
 			ENUM unknown_key) const
 {
   auto find_iter = name_map_.find(name);

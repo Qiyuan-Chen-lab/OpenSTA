@@ -33,7 +33,7 @@
 #include "Network.hh"
 #include "Clock.hh"
 #include "Graph.hh"
-#include "Path.hh"
+#include "PathVertex.hh"
 #include "StaState.hh"
 #include "Search.hh"
 #include "PathAnalysisPt.hh"
@@ -88,7 +88,7 @@ ClkLatency::reportClkLatency(const Clock *clk,
   report_->reportLine("Clock %s", clk->name());
   for (const RiseFall *src_rf : RiseFall::range()) {
     for (const RiseFall *end_rf : RiseFall::range()) {
-      Path path_min;
+      PathVertex path_min;
       Delay insertion_min;
       Delay delay_min;
       float internal_latency_min;
@@ -97,7 +97,7 @@ ClkLatency::reportClkLatency(const Clock *clk,
       clk_delays.delay(src_rf, end_rf, MinMax::min(), insertion_min,
                        delay_min, internal_latency_min, latency_min,
                        path_min, exists_min);
-      Path path_max;
+      PathVertex path_max;
       Delay insertion_max;
       Delay delay_max;
       float internal_latency_max;
@@ -153,7 +153,7 @@ ClkLatency::findClkDelays(ConstClockSeq &clks,
   for (Vertex *clk_vertex : *graph_->regClkVertices()) {
     VertexPathIterator path_iter(clk_vertex, this);
     while (path_iter.hasNext()) {
-      Path *path = path_iter.next();
+      PathVertex *path = path_iter.next();
       const ClockEdge *path_clk_edge = path->clkEdge(this);
       const PathAnalysisPt *path_ap = path->pathAnalysisPt(this);
       if (path_clk_edge
@@ -206,7 +206,7 @@ ClkDelays::delay(const RiseFall *src_rf,
                  Delay &delay,
                  float &lib_clk_delay,
                  Delay &latency,
-                 Path &path,
+                 PathVertex &path,
                  bool &exists) const
 {
   int src_rf_index = src_rf->index();
@@ -239,7 +239,7 @@ void
 ClkDelays::setLatency(const RiseFall *src_rf,
                       const RiseFall *end_rf,
                       const MinMax *min_max,
-                      Path *path,
+                      PathVertex *path,
                       bool include_internal_latency,
                       StaState *sta)
 {
@@ -267,7 +267,7 @@ ClkDelays::setLatency(const RiseFall *src_rf,
 }
 
 Delay
-ClkDelays::latency(Path *clk_path,
+ClkDelays::latency(PathVertex *clk_path,
                    StaState *sta)
 {
 
@@ -278,16 +278,16 @@ ClkDelays::latency(Path *clk_path,
 }
 
 float
-ClkDelays::delay(Path *clk_path,
+ClkDelays::delay(PathVertex *clk_path,
                  StaState *sta)
 {
-  Arrival arrival = clk_path->arrival();
+  Arrival arrival = clk_path->arrival(sta);
   const ClockEdge *path_clk_edge = clk_path->clkEdge(sta);
   return delayAsFloat(arrival) - path_clk_edge->time();
 }
 
 float
-ClkDelays::insertionDelay(Path *clk_path,
+ClkDelays::insertionDelay(PathVertex *clk_path,
                           StaState *sta)
 {
   const ClockEdge *clk_edge = clk_path->clkEdge(sta);
@@ -302,7 +302,7 @@ ClkDelays::insertionDelay(Path *clk_path,
 }
 
 float
-ClkDelays::clkTreeDelay(Path *clk_path,
+ClkDelays::clkTreeDelay(PathVertex *clk_path,
                         StaState *sta)
 {
   const Vertex *vertex = clk_path->vertex(sta);

@@ -33,6 +33,8 @@
 
 namespace sta {
 
+using std::string;
+
 inline bool
 stringEq(const char *str1,
 	 const char *str2)
@@ -165,19 +167,19 @@ isDigits(const char *str);
 char *
 stringPrint(const char *fmt,
 	    ...) __attribute__((format (printf, 1, 2)));
-std::string
+string
 stdstrPrint(const char *fmt,
 	       ...) __attribute__((format (printf, 1, 2)));
 char *
 stringPrintArgs(const char *fmt,
 		va_list args);
 void
-stringPrint(std::string &str,
+stringPrint(string &str,
 	    const char *fmt,
 	    ...) __attribute__((format (printf, 2, 3)));
 // Formated append to std::string.
 void
-stringAppend(std::string &str,
+stringAppend(string &str,
              const char *fmt,
              ...) __attribute__((format (printf, 2, 3)));
 
@@ -188,8 +190,6 @@ stringPrintTmp(const char *fmt,
 
 char *
 makeTmpString(size_t length);
-char *
-makeTmpString(std::string &str);
 bool
 isTmpString(const char *str);
 
@@ -197,13 +197,13 @@ isTmpString(const char *str);
 
 // Trim right spaces.
 void
-trimRight(std::string &str);
+trimRight(string &str);
 
-typedef Vector<std::string> StringVector;
+typedef Vector<string> StringVector;
 
 void
-split(const std::string &text,
-      const std::string &delims,
+split(const string &text,
+      const string &delims,
       // Return values.
       StringVector &tokens);
 

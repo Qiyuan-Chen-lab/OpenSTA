@@ -146,7 +146,7 @@ MakeTimingModel::makeLibrary()
   LibertyLibrary *default_lib = network_->defaultLibertyLibrary();
   *library_->units() = *default_lib->units();
 
-  for (const RiseFall *rf : RiseFall::range()) {
+  for (RiseFall *rf : RiseFall::range()) {
     library_->setInputThreshold(rf, default_lib->inputThreshold(rf));
     library_->setOutputThreshold(rf, default_lib->outputThreshold(rf));
     library_->setSlewLowerThreshold(rf, default_lib->slewLowerThreshold(rf));
@@ -209,7 +209,6 @@ MakeTimingModel::makePorts()
         float load_cap = graph_delay_calc_->loadCap(pin, dcalc_ap);
         lib_bit_port->setCapacitance(load_cap);
       }
-      delete member_iter;
     }
     else {
       LibertyPort *lib_port = lib_builder_->makePort(cell_, port_name);
@@ -281,7 +280,7 @@ MakeEndTimingArcs::visit(PathEnd *path_end)
     Network *network = sta_->network();
     Debug *debug = sta_->debug();
     const MinMax *min_max = path_end->minMax(sta_);
-    Arrival data_delay = src_path->arrival();
+    Arrival data_delay = src_path->arrival(sta_);
     Delay clk_latency = path_end->targetClkDelay(sta_);
     ArcDelay check_margin = path_end->margin(sta_);
     Delay margin = min_max == MinMax::max()
@@ -293,7 +292,7 @@ MakeEndTimingArcs::visit(PathEnd *path_end)
                network->pathName(src_path->pin(sta_)),
                tgt_clk_edge->name(),
                path_end->typeName(),
-               min_max->to_string().c_str(),
+               min_max->asString(),
                delayAsString(margin, sta_));
     if (debug->check("make_timing_model", 3))
       sta_->reportPathEnd(path_end);
@@ -336,8 +335,8 @@ MakeTimingModel::findTimingFromInput(Port *input_port)
   if (!sta_->isClockSrc(input_pin)) {
     MakeEndTimingArcs end_visitor(sta_);
     OutputPinDelays output_delays;
-    for (const RiseFall *input_rf : RiseFall::range()) {
-      const RiseFallBoth *input_rf1 = input_rf->asRiseFallBoth();
+    for (RiseFall *input_rf : RiseFall::range()) {
+      RiseFallBoth *input_rf1 = input_rf->asRiseFallBoth();
       sta_->setInputDelay(input_pin, input_rf1,
                           sdc_->defaultArrivalClock(),
                           sdc_->defaultArrivalClockEdge()->transition(),
@@ -378,11 +377,11 @@ MakeTimingModel::findOutputDelays(const RiseFall *input_rf,
       Vertex *output_vertex = graph_->pinLoadVertex(output_pin);
       VertexPathIterator path_iter(output_vertex, this);
       while (path_iter.hasNext()) {
-        Path *path = path_iter.next();
+        PathVertex *path = path_iter.next();
         if (search_->matchesFilter(path, nullptr)) {
           const RiseFall *output_rf = path->transition(sta_);
           const MinMax *min_max = path->minMax(sta_);
-          Arrival delay = path->arrival();
+          Arrival delay = path->arrival(sta_);
           OutputDelays &delays = output_pin_delays[output_pin];
           delays.delays.mergeValue(output_rf, min_max,
                                    delayAsFloat(delay, min_max, sta_));
@@ -399,10 +398,10 @@ MakeTimingModel::makeSetupHoldTimingArcs(const Pin *input_pin,
                                          const ClockEdgeDelays &clk_margins)
 {
   for (const auto& [clk_edge, margins] : clk_margins) {
-    for (const MinMax *min_max : MinMax::range()) {
+    for (MinMax *min_max : MinMax::range()) {
       bool setup = (min_max == MinMax::max());
       TimingArcAttrsPtr attrs = nullptr;
-      for (const RiseFall *input_rf : RiseFall::range()) {
+      for (RiseFall *input_rf : RiseFall::range()) {
         float margin;
         bool exists;
         margins.value(input_rf, min_max, margin, exists);
@@ -427,10 +426,8 @@ MakeTimingModel::makeSetupHoldTimingArcs(const Pin *input_pin,
         for (const Pin *clk_pin : clk_edge->clock()->pins()) {
           LibertyPort *clk_port = modelPort(clk_pin);
           if (clk_port) {
-            const RiseFall *clk_rf = clk_edge->transition();
-            const TimingRole *role = setup
-              ? TimingRole::setup()
-              : TimingRole::hold();
+            RiseFall *clk_rf = clk_edge->transition();
+            TimingRole *role = setup ? TimingRole::setup() : TimingRole::hold();
             lib_builder_->makeFromTransitionArcs(cell_, clk_port,
                                                  input_port, nullptr,
                                                  clk_rf, role, attrs);
@@ -447,8 +444,8 @@ MakeTimingModel::makeInputOutputTimingArcs(const Pin *input_pin,
 {
   for (const auto& [output_pin, output_delays] : output_pin_delays) {
     TimingArcAttrsPtr attrs = nullptr;
-    for (const RiseFall *output_rf : RiseFall::range()) {
-      const MinMax *min_max = MinMax::max();
+    for (RiseFall *output_rf : RiseFall::range()) {
+      MinMax *min_max = MinMax::max();
       float delay;
       bool exists;
       output_delays.delays.value(output_rf, min_max, delay, exists);
@@ -489,12 +486,12 @@ MakeTimingModel::findClkedOutputPaths()
       Vertex *output_vertex = graph_->pinLoadVertex(output_pin);
       VertexPathIterator path_iter(output_vertex, this);
       while (path_iter.hasNext()) {
-        Path *path = path_iter.next();
+        PathVertex *path = path_iter.next();
         const ClockEdge *clk_edge = path->clkEdge(sta_);
         if (clk_edge) {
           const RiseFall *output_rf = path->transition(sta_);
           const MinMax *min_max = path->minMax(sta_);
-          Arrival delay = path->arrival();
+          Arrival delay = path->arrival(sta_);
           RiseFallMinMax &delays = clk_delays[clk_edge];
           delays.mergeValue(output_rf, min_max,
                             delayAsFloat(delay, min_max, sta_));
@@ -504,9 +501,9 @@ MakeTimingModel::findClkedOutputPaths()
         for (const Pin *clk_pin : clk_edge->clock()->pins()) {
           LibertyPort *clk_port = modelPort(clk_pin);
           if (clk_port) {
-            const RiseFall *clk_rf = clk_edge->transition();
+            RiseFall *clk_rf = clk_edge->transition();
             TimingArcAttrsPtr attrs = nullptr;
-            for (const RiseFall *output_rf : RiseFall::range()) {
+            for (RiseFall *output_rf : RiseFall::range()) {
               float delay = delays.value(output_rf, min_max_) - clk_edge->time();
               TimingModel *gate_model = makeGateModelTable(output_pin, delay, output_rf);
               if (attrs == nullptr)
@@ -570,7 +567,7 @@ MakeTimingModel::makeClkTreePaths(LibertyPort *lib_port,
     const RiseFall *end_rf = (sense == TimingSense::positive_unate)
       ? clk_rf
       : clk_rf->opposite();
-    Path clk_path;
+    PathVertex clk_path;
     Delay insertion, delay, latency;
     float lib_clk_delay;
     bool exists;
@@ -585,7 +582,7 @@ MakeTimingModel::makeClkTreePaths(LibertyPort *lib_port,
   }
   if (attrs) {
     attrs->setTimingSense(sense);
-    const TimingRole *role = (min_max == MinMax::min())
+    TimingRole *role = (min_max == MinMax::min())
       ? TimingRole::clockTreePathMin()
       : TimingRole::clockTreePathMax();
     lib_builder_->makeClockTreePathArcs(cell_, lib_port, role, min_max, attrs);

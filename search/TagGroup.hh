@@ -37,11 +37,13 @@ namespace sta {
 
 class TagGroupBldr;
 
+typedef Vector<PathPrev> PathPrevSeq;
+
 class TagGroup
 {
 public:
   TagGroup(TagGroupIndex index,
-	   PathIndexMap *path_index_map,
+	   ArrivalMap *arrival_map,
 	   bool has_clk_tag,
 	   bool has_genclk_src_tag,
 	   bool has_filter_tag,
@@ -57,27 +59,26 @@ public:
   bool hasGenClkSrcTag() const { return has_genclk_src_tag_; }
   bool hasFilterTag() const { return has_filter_tag_; }
   bool hasLoopTag() const { return has_loop_tag_; }
-  bool ownPathMap() const { return own_path_map_; }
-  size_t pathCount() const { return path_index_map_->size(); }
-  void pathIndex(Tag *tag,
-                 size_t &path_index,
-                 bool &exists) const;
-  size_t pathIndex(Tag *tag) const;
-  PathIndexMap *pathIndexMap() const { return path_index_map_; }
+  bool ownArrivalMap() const { return own_arrival_map_; }
+  int arrivalCount() const { return arrival_map_->size(); }
+  void arrivalIndex(Tag *tag,
+		    int &arrival_index,
+		    bool &exists) const;
+  ArrivalMap *arrivalMap() const { return arrival_map_; }
   bool hasTag(Tag *tag) const;
 
 protected:
-  static size_t pathIndexMapHash(PathIndexMap *path_index_map);
+  size_t arrivalMapHash(ArrivalMap *arrival_map);
 
-  // tag -> path index
-  PathIndexMap *path_index_map_;
+  // tag -> arrival index
+  ArrivalMap *arrival_map_;
   size_t hash_;
   unsigned int index_:tag_group_index_bits;
   bool has_clk_tag_:1;
   bool has_genclk_src_tag_:1;
   bool has_filter_tag_:1;
   bool has_loop_tag_:1;
-  bool own_path_map_:1;
+  bool own_arrival_map_:1;
 };
 
 class TagGroupHash
@@ -105,56 +106,48 @@ public:
   void reportArrivalEntries() const;
   TagGroup *makeTagGroup(TagGroupIndex index,
 			 const StaState *sta);
-  size_t pathCount() const { return path_index_map_.size();; }
   bool hasClkTag() const { return has_clk_tag_; }
   bool hasGenClkSrcTag() const { return has_genclk_src_tag_; }
   bool hasFilterTag() const { return has_filter_tag_; }
   bool hasLoopTag() const { return has_loop_tag_; }
-  bool hasPropagatedClk() const { return has_propagated_clk_; }
-  Path *tagMatchPath(Tag *tag);
-  void tagMatchPath(Tag *tag,
-                    // Return values.
-                    Path *&match,
-                    size_t &path_index);
-  Arrival arrival(size_t path_index) const;
-  // prev_path == hull
+  void tagMatchArrival(Tag *tag,
+		       // Return values.
+		       Tag *&tag_match,
+		       Arrival &arrival,
+		       int &arrival_index) const;
+  Arrival arrival(int arrival_index) const;
   void setArrival(Tag *tag,
-		  const Arrival &arrival);
-  void setMatchPath(Path *match,
-                    size_t path_index,
-                    Tag *tag,
-                    Arrival arrival,
-                    Path *prev_path,
-                    Edge *prev_edge,
-                    TimingArc *prev_arc);
-  void insertPath(Tag *tag,
-                  Arrival arrival,
-                  Path *prev_path,
-                  Edge *prev_edge,
-                  TimingArc *prev_arc);
-  void insertPath(const Path &path);
-  PathIndexMap &pathIndexMap() { return path_index_map_; }
-  void copyPaths(TagGroup *tag_group,
-                 Path *paths);
+		  const Arrival &arrival,
+		  PathPrev *prev_path);
+  void setMatchArrival(Tag *tag,
+		       Tag *tag_match,
+		       const Arrival &arrival,
+		       int arrival_index,
+		       PathPrev *prev_path);
+  ArrivalMap *arrivalMap() { return &arrival_map_; }
+  PathPrev &prevPath(int arrival_index);
+  void copyArrivals(TagGroup *tag_group,
+		    Arrival *arrivals,
+		    PathPrev *prev_paths);
 
 protected:
   int tagMatchIndex();
-  PathIndexMap *makePathIndexMap(const StaState *sta);
+  ArrivalMap *makeArrivalMap(const StaState *sta);
 
   Vertex *vertex_;
-  int default_path_count_;
-  PathIndexMap path_index_map_;
-  std::vector<Path>  paths_;
+  int default_arrival_count_;
+  ArrivalMap arrival_map_;
+  ArrivalSeq arrivals_;
+  PathPrevSeq prev_paths_;
   bool has_clk_tag_;
-  bool has_genclk_src_tag_;
+  bool has_genclk_src_tag_:1;
   bool has_filter_tag_;
   bool has_loop_tag_;
-  bool has_propagated_clk_;
   const StaState *sta_;
 };
 
 void
-pathIndexMapReport(const PathIndexMap *path_index_map,
-                   const StaState *sta);
+arrivalMapReport(const ArrivalMap *arrival_map,
+		 const StaState *sta);
 
 } // namespace

@@ -40,7 +40,7 @@
 
 void
 sta::SaifParse::error(const location_type &loc,
-                      const std::string &msg)
+                      const string &msg)
 {
   reader->report()->fileError(169,reader->filename(),loc.begin.line,"%s",msg.c_str());
 }

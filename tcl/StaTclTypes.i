@@ -42,7 +42,7 @@
 #include "Clock.hh"
 #include "Corner.hh"
 #include "Search.hh"
-#include "Path.hh"
+#include "PathRef.hh"
 #include "search/Tag.hh"
 #include "PathEnd.hh"
 #include "SearchClass.hh"
@@ -452,40 +452,38 @@ using namespace sta;
   Transition *tr = $1;
   const char *str = "";
   if (tr)
-    str = tr->to_string().c_str();
+    str = tr->asString();
   Tcl_SetResult(interp, const_cast<char*>(str), TCL_STATIC);
 }
 
 %typemap(in) RiseFall* {
   int length;
   const char *arg = Tcl_GetStringFromObj($input, &length);
-  const RiseFall *rf = RiseFall::find(arg);
+  RiseFall *rf = RiseFall::find(arg);
   if (rf == nullptr) {
     tclArgError(interp, 2151, "Unknown rise/fall edge '%s'.", arg);
     return TCL_ERROR;
   }
-  // Swig is retarded and drops const on args.
-  $1 = const_cast<RiseFall*>(rf);
+  $1 = rf;
 }
 
 %typemap(out) RiseFall* {
-  const RiseFall *rf = $1;
+  const RiseFall *tr = $1;
   const char *str = "";
-  if (rf)
-    str = rf->to_string().c_str();
+  if (tr)
+    str = tr->asString();
   Tcl_SetResult(interp, const_cast<char*>(str), TCL_STATIC);
 }
 
 %typemap(in) RiseFallBoth* {
   int length;
   const char *arg = Tcl_GetStringFromObj($input, &length);
-  const RiseFallBoth *rf = RiseFallBoth::find(arg);
-  if (rf == nullptr) {
+  RiseFallBoth *tr = RiseFallBoth::find(arg);
+  if (tr == nullptr) {
     tclArgError(interp, 2152, "Unknown transition name '%s'.", arg);
     return TCL_ERROR;
   }
-  // Swig is retarded and drops const on args.
-  $1 = const_cast<RiseFallBoth*>(rf);
+  $1 = tr;
 }
 
 %typemap(out) RiseFallBoth* {
@@ -511,10 +509,9 @@ using namespace sta;
 %typemap(in) TimingRole* {
   int length;
   const char *arg = Tcl_GetStringFromObj($input, &length);
-  const TimingRole *role = TimingRole::find(arg);
+  TimingRole *role = TimingRole::find(arg);
   if (role)
-    // Swig is retarded and drops const on args.
-    $1 = const_cast<TimingRole*>(TimingRole::find(arg));
+    $1 = TimingRole::find(arg);
   else {
     tclArgError(interp, 2154, "Unknown timing role '%s'.", arg);
     return TCL_ERROR;
@@ -522,7 +519,7 @@ using namespace sta;
 }
 
 %typemap(out) TimingRole* {
-  Tcl_SetResult(interp, const_cast<char*>($1->to_string().c_str()), TCL_STATIC);
+  Tcl_SetResult(interp, const_cast<char*>($1->asString()), TCL_STATIC);
 }
 
 %typemap(in) LogicValue {
@@ -851,8 +848,7 @@ using namespace sta;
 %typemap(in) MinMax* {
   int length;
   char *arg = Tcl_GetStringFromObj($input, &length);
-  // Swig is retarded and drops const on args.
-  MinMax *min_max = const_cast<MinMax*>(MinMax::find(arg));
+  MinMax *min_max = MinMax::find(arg);
   if (min_max)
     $1 = min_max;
   else {
@@ -862,18 +858,17 @@ using namespace sta;
 }
 
 %typemap(out) MinMax* {
-  Tcl_SetResult(interp, const_cast<char*>($1->to_string().c_str()), TCL_STATIC);
+  Tcl_SetResult(interp, const_cast<char*>($1->asString()), TCL_STATIC);
 }
 
 %typemap(out) MinMax* {
-  Tcl_SetResult(interp, const_cast<char*>($1->to_string().c_str()), TCL_STATIC);
+  Tcl_SetResult(interp, const_cast<char*>($1->asString()), TCL_STATIC);
 }
 
 %typemap(in) MinMaxAll* {
   int length;
   char *arg = Tcl_GetStringFromObj($input, &length);
-  // Swig is retarded and drops const on args.
-  MinMaxAll *min_max = const_cast<MinMaxAll*>(MinMaxAll::find(arg));
+  MinMaxAll *min_max = MinMaxAll::find(arg);
   if (min_max)
     $1 = min_max;
   else {
@@ -888,8 +883,7 @@ using namespace sta;
   if (stringEqual(arg, "NULL"))
     $1 = nullptr;
   else {
-    // Swig is retarded and drops const on args.
-    MinMaxAll *min_max = const_cast<MinMaxAll*>(MinMaxAll::find(arg));
+    MinMaxAll *min_max = MinMaxAll::find(arg);
     if (min_max)
       $1 = min_max;
     else {
@@ -904,16 +898,15 @@ using namespace sta;
 }
 
 // SetupHold is typedef'd to MinMax.
-%typemap(in) const SetupHold* {
+%typemap(in) SetupHold* {
   int length;
   char *arg = Tcl_GetStringFromObj($input, &length);
-  // Swig is retarded and drops const on args.
   if (stringEqual(arg, "hold")
       || stringEqual(arg, "min"))
-    $1 = const_cast<MinMax*>(MinMax::min());
+    $1 = MinMax::min();
   else if (stringEqual(arg, "setup")
 	   || stringEqual(arg, "max"))
-    $1 = const_cast<MinMax*>(MinMax::max());
+    $1 = MinMax::max();
   else {
     tclArgError(interp, 2162, "%s not setup, hold, min or max.", arg);
     return TCL_ERROR;
@@ -921,19 +914,18 @@ using namespace sta;
 }
 
 // SetupHoldAll is typedef'd to MinMaxAll.
-%typemap(in) const SetupHoldAll* {
+%typemap(in) SetupHoldAll* {
   int length;
   char *arg = Tcl_GetStringFromObj($input, &length);
-  // Swig is retarded and drops const on args.
   if (stringEqual(arg, "hold")
       || stringEqual(arg, "min"))
-    $1 = const_cast<SetupHoldAll*>(SetupHoldAll::min());
+    $1 = SetupHoldAll::min();
   else if (stringEqual(arg, "setup")
 	   || stringEqual(arg, "max"))
-    $1 = const_cast<SetupHoldAll*>(SetupHoldAll::max());
+    $1 = SetupHoldAll::max();
   else if (stringEqual(arg, "setup_hold")
 	   || stringEqual(arg, "min_max"))
-    $1 = const_cast<SetupHoldAll*>(SetupHoldAll::all());
+    $1 = SetupHoldAll::all();
   else {
     tclArgError(interp, 2163, "%s not setup, hold, setup_hold, min, max or min_max.", arg);
     return TCL_ERROR;
@@ -941,11 +933,10 @@ using namespace sta;
 }
 
 // EarlyLate is typedef'd to MinMax.
-%typemap(in) const EarlyLate* {
+%typemap(in) EarlyLate* {
   int length;
   char *arg = Tcl_GetStringFromObj($input, &length);
-  // Swig is retarded and drops const on args.
-  EarlyLate *early_late = const_cast<EarlyLate*>(EarlyLate::find(arg));
+  EarlyLate *early_late = EarlyLate::find(arg);
   if (early_late)
     $1 = early_late;
   else {
@@ -955,11 +946,10 @@ using namespace sta;
 }
 
 // EarlyLateAll is typedef'd to MinMaxAll.
-%typemap(in) const EarlyLateAll* {
+%typemap(in) EarlyLateAll* {
   int length;
   char *arg = Tcl_GetStringFromObj($input, &length);
-  // Swig is retarded and drops const on args.
-  EarlyLateAll *early_late = const_cast<EarlyLateAll*>(EarlyLateAll::find(arg));
+  EarlyLateAll *early_late = EarlyLateAll::find(arg);
   if (early_late)
     $1 = early_late;
   else {
@@ -1148,17 +1138,17 @@ using namespace sta;
   Tcl_SetObjResult(interp, obj);
 }
 
-%typemap(out) PathSeq* {
+%typemap(out) PathRefSeq* {
   Tcl_Obj *obj = SWIG_NewInstanceObj($1, $1_descriptor, false);
   Tcl_SetObjResult(interp, obj);
 
   Tcl_Obj *list = Tcl_NewListObj(0, nullptr);
-  PathSeq *paths = $1;
-  PathSeq::Iterator path_iter(paths);
+  PathRefSeq *paths = $1;
+  PathRefSeq::Iterator path_iter(paths);
   while (path_iter.hasNext()) {
-    Path *path = &path_iter.next();
-    Path *copy = new Path(path);
-    Tcl_Obj *obj = SWIG_NewInstanceObj(copy, SWIGTYPE_p_Path, false);
+    PathRef *path = &path_iter.next();
+    PathRef *copy = new PathRef(path);
+    Tcl_Obj *obj = SWIG_NewInstanceObj(copy, SWIGTYPE_p_PathRef, false);
     Tcl_ListObjAppendElement(interp, list, obj);
   }
   Tcl_SetObjResult(interp, list);
@@ -1364,10 +1354,11 @@ using namespace sta;
     Tcl_SetObjResult(interp, list);
   }
     break;
-  case PropertyValue::Type::type_paths: {
+  case PropertyValue::Type::type_path_refs: {
     Tcl_Obj *list = Tcl_NewListObj(0, nullptr);
-    for (const Path *path : *value.paths()) {
-      Tcl_Obj *obj = SWIG_NewInstanceObj(const_cast<Path*>(path), SWIGTYPE_p_Path, false);
+    for (PathRef &path : *value.pathRefs()) {
+      PathRef *copy = new PathRef(path);
+      Tcl_Obj *obj = SWIG_NewInstanceObj(copy, SWIGTYPE_p_PathRef, false);
       Tcl_ListObjAppendElement(interp, list, obj);
     }
     Tcl_SetObjResult(interp, list);

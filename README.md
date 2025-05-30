@@ -66,7 +66,7 @@ OpenSTA is open source, meaning the sources are published and can be
 compiled locally.  Derivative works are supported as long as they
 adhere to the GPL license requirements.  However, OpenSTA is not
 supported by a public community of developers as many other open
-source projects are. The copyright and development are exclusive to
+source projects are. The copyright and develpment are exclusive to
 Parallax Software.
 
 Removing copyright and license notices from OpenSTA sources (or any
@@ -86,7 +86,7 @@ OpenSTA is built with CMake.
 
 ### Prerequisites
 
-The build dependency versions are shown below.  Other versions may
+The build dependency versions are show below.  Other versions may
 work, but these are the versions used for development.
 
 ```
@@ -194,7 +194,7 @@ following command builds a Docker image.
 
 ```
 cd OpenSTA
-docker build --file Dockerfile.ubuntu22.04 --tag opensta .
+docker build --file Dockerfile.ubuntu22.04 --tag OpenSTA .
 ```
 
 To run a docker container using the OpenSTA image, use the -v option
@@ -202,18 +202,15 @@ to docker to mount direcories with data to use and -i to run
 interactively.
 
 ```
-docker run -i -v $HOME:/data opensta
+docker run -i -v $HOME:/data OpenSTA
 ```
 
 ## Build on Macos/Darwin
 
-The XCode versions of Tcl, Flex and Bison cannot be used to build OpenSTA.
-Use Homebrew to install them. The following command installs the tools
-required to build OpenSTA in the Brewfile.
+THe XCode versions of Tcl, Flex and Bison cannot be used to build OpenSTA.
+Use Homebrew to install them.
 
-```
-brew bundle install
-```
+  brew install cmake swig flex bison tcl-tk zlib
 
 Set these variables before using cmake to cirumvent the Xcode versions.
 
@@ -258,12 +255,12 @@ case directory.
 Contributors must sign the Contributor License Agreement (doc/CLA.txt)
 when submitting pull requests.
 
-All contributors should read doc/CodingGuidelines.txt for notes on
+All contributors should read doc/CodingGuidelines.txt for nodes on
 making code that adheres to the existing naming and formatting style.
 
 Contributions that claim 4% performance improvements in OpenROAD flow
 scripts will largely be ignored. Small performance improvements
-simply do not justify the time required to audit and verify the changes.
+simply do not justify the time requied to audit and verify the changes.
 
 Contributions that add dependencies on external libraries like boost,
 abseil and Intel TBB will not be accepted.

@@ -41,8 +41,6 @@
 
 namespace sta {
 
-using std::string;
-
 typedef unsigned long long VerilogConstant10;
 
 static string
@@ -353,7 +351,7 @@ VerilogReader::makeNamedPortRefCellPorts(Cell *cell,
 // Make sure each declaration appears in the module port list.
 void
 VerilogReader::checkModuleDcls(VerilogModule *module,
-			       std::set<string> &port_names)
+			       set<string> &port_names)
 {
   for (auto const & [port_name, dcl] : *module->declarationMap()) {
     PortDirection *dir = dcl->direction();
@@ -1643,13 +1641,13 @@ VerilogAttrEntry::VerilogAttrEntry(const string &key,
 {
 }
 
-string
+std::string
 VerilogAttrEntry::key()
 {
   return key_;
 }
 
-string
+std::string
 VerilogAttrEntry::value()
 {
   return value_;

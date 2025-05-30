@@ -48,11 +48,11 @@ class LibertyScanner;
 typedef Vector<LibertyStmt*> LibertyStmtSeq;
 typedef Vector<LibertyGroup*> LibertyGroupSeq;
 typedef Vector<LibertyAttr*> LibertyAttrSeq;
-typedef Map<std::string, LibertyAttr*> LibertyAttrMap;
-typedef Map<std::string, LibertyDefine*> LibertyDefineMap;
+typedef Map<const char *, LibertyAttr*, CharPtrLess> LibertyAttrMap;
+typedef Map<const char *, LibertyDefine*, CharPtrLess> LibertyDefineMap;
 typedef Vector<LibertyAttrValue*> LibertyAttrValueSeq;
-typedef Map<std::string, float> LibertyVariableMap;
-typedef Map<std::string, LibertyGroupVisitor*>LibertyGroupVisitorMap;
+typedef Map<const char *, float, CharPtrLess> LibertyVariableMap;
+typedef Map<const char*,LibertyGroupVisitor*,CharPtrLess>LibertyGroupVisitorMap;
 typedef LibertyAttrValueSeq::Iterator LibertyAttrValueIterator;
 typedef Vector<LibertyGroup*> LibertyGroupSeq;
 
@@ -67,8 +67,8 @@ public:
   LibertyParser(const char *filename,
                 LibertyGroupVisitor *library_visitor,
                 Report *report);
-  const std::string &filename() const { return filename_; }
-  void setFilename(const std::string &filename);
+  const string &filename() const { return filename_; }
+  void setFilename(const string &filename);
   Report *report() const { return report_; }
   LibertyStmt *makeDefine(LibertyAttrValueSeq *values,
                           int line);
@@ -88,12 +88,12 @@ public:
                                int line);
   LibertyAttrValue *makeStringAttrValue(char *value);
   LibertyAttrValue *makeFloatAttrValue(float value);
-  LibertyStmt *makeVariable(const char *var,
+  LibertyStmt *makeVariable(char *var,
                             float value,
                             int line);
 
 private:
-  std::string filename_;
+  string filename_;
   LibertyGroupVisitor *group_visitor_;
   Report *report_;
   LibertyGroupSeq group_stack_;
@@ -103,7 +103,7 @@ private:
 class LibertyStmt
 {
 public:
-  LibertyStmt(int line);
+  explicit LibertyStmt(int line);
   virtual ~LibertyStmt() {}
   int line() const { return line_; }
   virtual bool isGroup() const { return false; }
@@ -126,7 +126,7 @@ public:
 	       int line);
   virtual ~LibertyGroup();
   virtual bool isGroup() const { return true; }
-  const char *type() const { return type_.c_str(); }
+  const char *type() const { return type_; }
   // First param as a string.
   const char *firstName();
   // Second param as a string.
@@ -143,7 +143,7 @@ public:
 protected:
   void parseNames(LibertyAttrValueSeq *values);
 
-  std::string type_;
+  const char *type_;
   LibertyAttrValueSeq *params_;
   LibertyAttrSeq *attrs_;
   LibertyAttrMap *attr_map_;
@@ -154,13 +154,13 @@ protected:
 class LibertySubgroupIterator : public LibertyGroupSeq::Iterator
 {
 public:
-  LibertySubgroupIterator(LibertyGroup *group);
+  explicit LibertySubgroupIterator(LibertyGroup *group);
 };
 
 class LibertyAttrIterator : public LibertyAttrSeq::Iterator
 {
 public:
-  LibertyAttrIterator(LibertyGroup *group);
+  explicit LibertyAttrIterator(LibertyGroup *group);
 };
 
 // Abstract base class for attributes.
@@ -169,7 +169,8 @@ class LibertyAttr : public LibertyStmt
 public:
   LibertyAttr(const char *name,
 	      int line);
-  const char *name() const { return name_.c_str(); }
+  virtual ~LibertyAttr();
+  const char *name() const { return name_; }
   virtual bool isAttribute() const { return true; }
   virtual bool isSimple() const = 0;
   virtual bool isComplex() const = 0;
@@ -177,7 +178,7 @@ public:
   virtual LibertyAttrValue *firstValue() = 0;
 
 protected:
-  std::string name_;
+  const char *name_;
 };
 
 // Abstract base class for simple attributes.
@@ -231,22 +232,21 @@ public:
 class LibertyStringAttrValue : public LibertyAttrValue
 {
 public:
-  LibertyStringAttrValue(const char *value);
-  virtual ~LibertyStringAttrValue() {}
+  explicit LibertyStringAttrValue(const char *value);
+  virtual ~LibertyStringAttrValue();
   virtual bool isFloat() { return false; }
   virtual bool isString() { return true; }
   virtual float floatValue();
   virtual const char *stringValue();
 
 private:
-  std::string value_;
+  const char *value_;
 };
 
 class LibertyFloatAttrValue : public LibertyAttrValue
 {
 public:
-  LibertyFloatAttrValue(float value);
-  virtual ~LibertyFloatAttrValue() {}
+  explicit LibertyFloatAttrValue(float value);
   virtual bool isString() { return false; }
   virtual bool isFloat() { return true; }
   virtual float floatValue();
@@ -266,13 +266,14 @@ public:
 		LibertyGroupType group_type,
 		LibertyAttrType value_type,
 		int line);
+  virtual ~LibertyDefine();
   virtual bool isDefine() const { return true; }
-  const char *name() const { return name_.c_str(); }
+  const char *name() const { return name_; }
   LibertyGroupType groupType() const { return group_type_; }
   LibertyAttrType valueType() const { return value_type_; }
 
 private:
-  std::string name_;
+  const char *name_;
   LibertyGroupType group_type_;
   LibertyAttrType value_type_;
 };
@@ -287,12 +288,15 @@ public:
   LibertyVariable(const char *var,
 		  float value,
 		  int line);
+  // var_ is NOT deleted by ~LibertyVariable because the group
+  // variable map ref's it.
+  virtual ~LibertyVariable();
   virtual bool isVariable() const { return true; }
-  const char *variable() const { return var_.c_str(); }
+  const char *variable() const { return var_; }
   float value() const { return value_; }
 
 private:
-  std::string var_;
+  const char *var_;
   float value_;
 };
 

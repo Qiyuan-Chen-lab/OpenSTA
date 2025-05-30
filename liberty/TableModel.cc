@@ -375,7 +375,7 @@ ReceiverModel::~ReceiverModel()
 void
 ReceiverModel::setCapacitanceModel(TableModel *table_model,
                                    size_t segment,
-                                   const RiseFall *rf)
+                                   RiseFall *rf)
 {
   if ((segment + 1) * RiseFall::index_count > capacitance_models_.size())
     capacitance_models_.resize((segment + 1) * RiseFall::index_count);
@@ -2062,11 +2062,16 @@ OutputWaveforms::finalResistance()
 
 ////////////////////////////////////////////////////////////////
 
-DriverWaveform::DriverWaveform(const string &name,
+DriverWaveform::DriverWaveform(const char *name,
                                TablePtr waveforms) :
   name_(name),
   waveforms_(waveforms)
 {
+}
+
+DriverWaveform::~DriverWaveform()
+{
+  stringDelete(name_);
 }
 
 Table1

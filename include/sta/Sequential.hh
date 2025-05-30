@@ -55,8 +55,10 @@ enum class StateInternalValue {
 
 class StatetableRow;
 
-typedef std::vector<StateInputValue> StateInputValues;
-typedef std::vector<StateInternalValue> StateInternalValues;
+using std::vector;
+
+typedef vector<StateInputValue> StateInputValues;
+typedef vector<StateInternalValue> StateInternalValues;
 
 // Register/Latch
 class Sequential

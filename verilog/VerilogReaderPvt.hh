@@ -32,9 +32,9 @@
 
 namespace sta {
 
-typedef Map<std::string, VerilogDcl*> VerilogDclMap;
+typedef Map<string, VerilogDcl*> VerilogDclMap;
 typedef Vector<bool> VerilogConstantValue;
-typedef std::vector<std::string> StdStringSeq;
+typedef vector<string> StdStringSeq;
 
 class VerilogStmt
 {
@@ -55,19 +55,19 @@ private:
 class VerilogModule : public VerilogStmt
 {
 public:
-  VerilogModule(const std::string &name,
+  VerilogModule(const string &name,
                 VerilogNetSeq *ports,
                 VerilogStmtSeq *stmts,
                 VerilogAttrStmtSeq *attr_stmts,
-                const std::string &filename,
+                const string &filename,
                 int line,
                 VerilogReader *reader);
   virtual ~VerilogModule();
-  const std::string &name() { return name_; }
+  const string &name() { return name_; }
   const char *filename() { return filename_.c_str(); }
   VerilogAttrStmtSeq *attrStmts() { return attr_stmts_; }
   VerilogNetSeq *ports() { return ports_; }
-  VerilogDcl *declaration(const std::string &net_name);
+  VerilogDcl *declaration(const string &net_name);
   VerilogStmtSeq *stmts() { return stmts_; }
   VerilogDclMap *declarationMap() { return &dcl_map_; }
   void parseDcl(VerilogDcl *dcl,
@@ -79,8 +79,8 @@ private:
 			 StdStringSet &inst_names,
 			 VerilogReader *reader);
 
-  std::string name_;
-  std::string filename_;
+  string name_;
+  string filename_;
   VerilogNetSeq *ports_;
   VerilogStmtSeq *stmts_;
   VerilogDclMap dcl_map_;
@@ -99,7 +99,7 @@ public:
              VerilogAttrStmtSeq *attr_stmts,
              int line);
   virtual ~VerilogDcl();
-  const std::string &portName();
+  const string &portName();
   virtual bool isBus() const { return false; }
   virtual bool isDeclaration() const { return true; }
   VerilogDclArgSeq *args() const { return args_; }
@@ -143,15 +143,15 @@ private:
 class VerilogDclArg
 {
 public:
-  VerilogDclArg(const std::string &net_name);
+  VerilogDclArg(const string &net_name);
   VerilogDclArg(VerilogAssign *assign);
   ~VerilogDclArg();
-  const std::string &netName();
+  const string &netName();
   bool isNamed() const { return assign_ == nullptr; }
   VerilogAssign *assign() { return assign_; }
 
 private:
-  std::string net_name_;
+  string net_name_;
   VerilogAssign *assign_;
 };
 
@@ -175,37 +175,37 @@ private:
 class VerilogInst : public VerilogStmt
 {
 public:
-  VerilogInst(const std::string &inst_name,
+  VerilogInst(const string &inst_name,
               VerilogAttrStmtSeq *attr_stmts,
               const int line);
   virtual ~VerilogInst();
   virtual bool isInstance() const { return true; }
-  const std::string &instanceName() const { return inst_name_; }
+  const string &instanceName() const { return inst_name_; }
   VerilogAttrStmtSeq *attrStmts() const { return attr_stmts_; }
-  void setInstanceName(const std::string &inst_name);
+  void setInstanceName(const string &inst_name);
 
 private:
-  std::string inst_name_;
+  string inst_name_;
   VerilogAttrStmtSeq *attr_stmts_;
 };
 
 class VerilogModuleInst : public VerilogInst
 {
 public:
-  VerilogModuleInst(const std::string &module_name,
-                    const std::string &inst_name,
+  VerilogModuleInst(const string &module_name,
+                    const string &inst_name,
                     VerilogNetSeq *pins,
                     VerilogAttrStmtSeq *attr_stmts,
                     const int line);
   virtual ~VerilogModuleInst();
   virtual bool isModuleInst() const { return true; }
-  const std::string &moduleName() const { return module_name_; }
+  const string &moduleName() const { return module_name_; }
   VerilogNetSeq *pins() const { return pins_; }
   bool namedPins();
   bool hasPins();
 
 private:
-  std::string module_name_;
+  string module_name_;
   VerilogNetSeq *pins_;
 };
 
@@ -216,7 +216,7 @@ class VerilogLibertyInst : public VerilogInst
 {
 public:
   VerilogLibertyInst(LibertyCell *cell,
-                     const std::string &inst_name,
+                     const string &inst_name,
                      const StdStringSeq &net_names,
                      VerilogAttrStmtSeq *attr_stmts,
                      const int line);
@@ -236,7 +236,7 @@ public:
   VerilogNet() {}
   virtual ~VerilogNet() {}
   virtual bool isNamed() const = 0;
-  virtual const std::string &name() const = 0;
+  virtual const string &name() const = 0;
   virtual bool isNamedPortRef() { return false; }
   virtual bool isNamedPortRefScalarNet() const { return false; }
   virtual int size(VerilogModule *module) = 0;
@@ -249,30 +249,30 @@ class VerilogNetUnnamed : public VerilogNet
 public:
   VerilogNetUnnamed() {}
   bool isNamed() const override { return false; }
-  const std::string &name() const override { return null_; }
+  const string &name() const override { return null_; }
 
 private:
-  static const std::string null_;
+  static const string null_;
 };
 
 class VerilogNetNamed : public VerilogNet
 {
 public:
-  VerilogNetNamed(const std::string &name);
+  VerilogNetNamed(const string &name);
   virtual ~VerilogNetNamed();
   bool isNamed() const override { return true; }
   virtual bool isScalar() const = 0;
-  const std::string &name() const override { return name_; }
+  const string &name() const override { return name_; }
 
 protected:
-  std::string name_;
+  string name_;
 };
 
 // Named net reference, which could be the name of a scalar or bus signal.
 class VerilogNetScalar : public VerilogNetNamed
 {
 public:
-  VerilogNetScalar(const std::string &name);
+  VerilogNetScalar(const string &name);
   virtual bool isScalar() const { return true; }
   virtual int size(VerilogModule *module);
   virtual VerilogNetNameIterator *nameIterator(VerilogModule *module,
@@ -282,7 +282,7 @@ public:
 class VerilogNetBitSelect : public VerilogNetNamed
 {
 public:
-  VerilogNetBitSelect(const std::string &name,
+  VerilogNetBitSelect(const string &name,
 		      int index);
   int index() { return index_; }
   virtual bool isScalar() const { return false; }
@@ -296,7 +296,7 @@ private:
 class VerilogNetPartSelect : public VerilogNetNamed
 {
 public:
-  VerilogNetPartSelect(const std::string &name,
+  VerilogNetPartSelect(const string &name,
 		       int from_index,
 		       int to_index);
   virtual bool isScalar() const { return false; }
@@ -314,7 +314,7 @@ private:
 class VerilogNetConstant : public VerilogNetUnnamed
 {
 public:
-  VerilogNetConstant(const std::string *constant,
+  VerilogNetConstant(const string *constant,
 		     VerilogReader *reader,
                      int line);
   virtual ~VerilogNetConstant();
@@ -323,14 +323,14 @@ public:
 					       VerilogReader *reader);
 
 private:
-  void parseConstant(const std::string *constant,
+  void parseConstant(const string *constant,
 		     VerilogReader *reader,
                      int line);
-  void parseConstant(const std::string *constant,
+  void parseConstant(const string *constant,
 		     size_t base_idx,
 		     int base,
 		     int digit_bit_count);
-  void parseConstant10(const std::string *constant,
+  void parseConstant10(const string *constant,
                        size_t base_idx,
 		       VerilogReader *reader,
                        int line);
@@ -355,7 +355,7 @@ private:
 class VerilogNetPortRef : public VerilogNetScalar
 {
 public:
-  VerilogNetPortRef(const std::string &name);
+  VerilogNetPortRef(const string &name);
   virtual bool isNamedPortRef() { return true; }
   virtual bool hasNet() = 0;
 };
@@ -367,26 +367,26 @@ public:
 class VerilogNetPortRefScalarNet : public VerilogNetPortRef
 {
 public:
-  VerilogNetPortRefScalarNet(const std::string &name);
-  VerilogNetPortRefScalarNet(const std::string &name,
-			     const std::string &net_name);
+  VerilogNetPortRefScalarNet(const string &name);
+  VerilogNetPortRefScalarNet(const string &name,
+			     const string &net_name);
   virtual bool isScalar() const { return true; }
   virtual bool isNamedPortRefScalarNet() const { return true; }
   virtual int size(VerilogModule *module);
   virtual VerilogNetNameIterator *nameIterator(VerilogModule *module,
 					       VerilogReader *reader);
   virtual bool hasNet() { return !net_name_.empty(); }
-  const std::string &netName() const { return net_name_; }
-  void setNetName(const std::string &net_name) { net_name_ = net_name; }
+  const string &netName() const { return net_name_; }
+  void setNetName(const string &net_name) { net_name_ = net_name; }
 
 private:
-  std::string net_name_;
+  string net_name_;
 };
 
 class VerilogNetPortRefScalar : public VerilogNetPortRef
 {
 public:
-  VerilogNetPortRefScalar(const std::string &name,
+  VerilogNetPortRefScalar(const string &name,
 			  VerilogNet *net);
   virtual ~VerilogNetPortRefScalar();
   virtual bool isScalar() const { return true; }
@@ -402,23 +402,23 @@ private:
 class VerilogNetPortRefBit : public VerilogNetPortRefScalar
 {
 public:
-  VerilogNetPortRefBit(const std::string &name,
+  VerilogNetPortRefBit(const string &name,
 		       int index,
 		       VerilogNet *net);
-  const std::string &name() const override { return bit_name_; }
+  const string &name() const override { return bit_name_; }
 
 private:
-  std::string bit_name_;
+  string bit_name_;
 };
 
 class VerilogNetPortRefPart : public VerilogNetPortRefBit
 {
 public:
-  VerilogNetPortRefPart(const std::string &name,
+  VerilogNetPortRefPart(const string &name,
 			int from_index,
 			int to_index,
 			VerilogNet *net);
-  const std::string &name() const override;
+  const string &name() const override;
   int toIndex() const { return to_index_; }
 
 private:
@@ -426,7 +426,7 @@ private:
 };
 
 // Abstract class for iterating over the component nets of a net.
-class VerilogNetNameIterator : public Iterator<const std::string&>
+class VerilogNetNameIterator : public Iterator<const string&>
 {
 };
 
@@ -444,15 +444,15 @@ private:
 class VerilogAttrEntry
 {
 public:
-  VerilogAttrEntry(const std::string &key,
-                   const std::string &value);
-  virtual std::string key();
-  virtual std::string value();
+  VerilogAttrEntry(const string &key,
+                   const string &value);
+  virtual string key();
+  virtual string value();
   virtual ~VerilogAttrEntry() = default;
 
 private:
-  std::string key_;
-  std::string value_;
+  string key_;
+  string value_;
 };
 
 } // namespace

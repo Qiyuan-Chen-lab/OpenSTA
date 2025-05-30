@@ -45,6 +45,7 @@
 #include "Parasitics.hh"
 #include "PathAnalysisPt.hh"
 #include "Path.hh"
+#include "PathRef.hh"
 #include "PathExpanded.hh"
 #include "StaState.hh"
 #include "search/Sim.hh"
@@ -117,11 +118,11 @@ private:
   int stageGateInputPathIndex(Stage stage);
   int stageDrvrPathIndex(Stage stage);
   int stageLoadPathIndex(Stage stage);
-  const Path *stageGateInputPath(Stage stage);
-  const Path *stageDrvrPath(Stage stage);
-  const Path *stageLoadPath(Stage stage);
-  const TimingArc *stageGateArc(Stage stage);
-  const TimingArc *stageWireArc(Stage stage);
+  const PathRef *stageGateInputPath(Stage stage);
+  const PathRef *stageDrvrPath(Stage stage);
+  const PathRef *stageLoadPath(Stage stage);
+  TimingArc *stageGateArc(Stage stage);
+  TimingArc *stageWireArc(Stage stage);
   Edge *stageGateEdge(Stage stage);
   Edge *stageWireEdge(Stage stage);
   Pin *stageGateInputPin(Stage stage);
@@ -138,7 +139,7 @@ private:
   float findSlew(const Path *path);
   float findSlew(const Path *path,
 		 const RiseFall *rf,
-		 const TimingArc *next_arc);
+		 TimingArc *next_arc);
   Path *path_;
   PathExpanded path_expanded_;
   // Input clock waveform cycles.
@@ -222,9 +223,9 @@ WritePathSpice::writeHeader()
   const Path *start_path = path_expanded_.startPath();
   string title = stdstrPrint("Path from %s %s to %s %s",
                              network_->pathName(start_path->pin(this)),
-                             start_path->transition(this)->to_string().c_str(),
+                             start_path->transition(this)->asString(),
                              network_->pathName(path_->pin(this)),
-                             path_->transition(this)->to_string().c_str());
+                             path_->transition(this)->asString());
   float max_time = maxTime();
   float time_step = 1e-13;
   writeHeader(title, max_time, time_step);
@@ -245,7 +246,7 @@ float
 WritePathSpice::maxTime()
 {
   Stage input_stage = stageFirst();
-  const Path *input_path = stageDrvrPath(input_stage);
+  const PathRef *input_path = stageDrvrPath(input_stage);
   if (input_path->isClock(this)) {
     const Clock *clk = input_path->clock(this);
     float period = clk->period();
@@ -263,7 +264,7 @@ WritePathSpice::pathMaxTime()
 {
   float max_time = 0.0;
   for (size_t i = 0; i < path_expanded_.size(); i++) {
-    const Path *path = path_expanded_.path(i);
+    const PathRef *path = path_expanded_.path(i);
     const RiseFall *rf = path->transition(this);
     Vertex *vertex = path->vertex(this);
     float path_max_slew = railToRailSlew(findSlew(vertex,rf,nullptr), rf);
@@ -277,7 +278,7 @@ WritePathSpice::pathMaxTime()
           path_max_slew = load_slew;
       }
     }
-    float path_max_time = delayAsFloat(path->arrival()) + path_max_slew * 2.0;
+    float path_max_time = delayAsFloat(path->arrival(this)) + path_max_slew * 2.0;
     if (path_max_time > max_time)
       max_time = path_max_time;
   }
@@ -320,7 +321,7 @@ WritePathSpice::writeInputSource()
   streamPrint(spice_stream_, "**************\n\n");
 
   Stage input_stage = stageFirst();
-  const Path *input_path = stageDrvrPath(input_stage);
+  const PathRef *input_path = stageDrvrPath(input_stage);
   if (input_path->isClock(this))
     writeClkWaveform();
   else
@@ -332,9 +333,9 @@ void
 WritePathSpice::writeInputWaveform()
 {
   Stage input_stage = stageFirst();
-  const Path *input_path = stageDrvrPath(input_stage);
+  const PathRef *input_path = stageDrvrPath(input_stage);
   const RiseFall *rf = input_path->transition(this);
-  const TimingArc *next_arc = stageGateArc(input_stage + 1);
+  TimingArc *next_arc = stageGateArc(input_stage + 1);
   float slew0 = findSlew(input_path, rf, next_arc);
 
   float threshold = default_library_->inputThreshold(rf);
@@ -357,14 +358,14 @@ void
 WritePathSpice::writeClkWaveform()
 {
   Stage input_stage = stageFirst();
-  const Path *input_path = stageDrvrPath(input_stage);
-  const TimingArc *next_arc = stageGateArc(input_stage + 1);
+  const PathRef *input_path = stageDrvrPath(input_stage);
+  TimingArc *next_arc = stageGateArc(input_stage + 1);
   const ClockEdge *clk_edge = input_path->clkEdge(this);
 
   const Clock *clk = clk_edge->clock();
   float period = clk->period();
   float time_offset = clkWaveformTimeOffset(clk);
-  const RiseFall *rf0, *rf1;
+  RiseFall *rf0, *rf1;
   float volt0;
   if (clk_edge->time() < period) {
     rf0 = RiseFall::rise();
@@ -402,7 +403,7 @@ WritePathSpice::findSlew(const Path *path)
 float
 WritePathSpice::findSlew(const Path *path,
                          const RiseFall *rf,
-                         const TimingArc *next_arc)
+                         TimingArc *next_arc)
 {
   Vertex *vertex = path->vertex(this);
   return findSlew(vertex, rf, next_arc);
@@ -418,9 +419,9 @@ WritePathSpice::writeMeasureStmts()
   streamPrint(spice_stream_, "********************\n\n");
 
   for (Stage stage = stageFirst(); stage <= stageLast(); stage++) {
-    const Path *gate_input_path = stageGateInputPath(stage);
-    const Path *drvr_path = stageDrvrPath(stage);
-    const Path *load_path = stageLoadPath(stage);
+    const PathRef *gate_input_path = stageGateInputPath(stage);
+    const PathRef *drvr_path = stageDrvrPath(stage);
+    const PathRef *load_path = stageLoadPath(stage);
     if (gate_input_path) {
       // gate input -> gate output
       writeMeasureSlewStmt(stage, gate_input_path);
@@ -519,7 +520,7 @@ WritePathSpice::writeGateStage(Stage stage)
 	      drvr_port->name());
   writeSubcktInst(inst);
 
-  const Path *drvr_path = stageDrvrPath(stage);
+  const PathRef *drvr_path = stageDrvrPath(stage);
   const RiseFall *drvr_rf = drvr_path->transition(this);
   Edge *gate_edge = stageGateEdge(stage);
 
@@ -549,7 +550,7 @@ WritePathSpice::writeGateStage(Stage stage)
 void
 WritePathSpice::writeStageParasitics(Stage stage)
 {
-  const Path *drvr_path = stageDrvrPath(stage);
+  const PathRef *drvr_path = stageDrvrPath(stage);
   DcalcAnalysisPt *dcalc_ap = drvr_path->dcalcAnalysisPt(this);
   ParasiticAnalysisPt *parasitic_ap = dcalc_ap->parasiticAnalysisPt();
   const Pin *drvr_pin = stageDrvrPin(stage);
@@ -578,7 +579,7 @@ WritePathSpice::findPathCellNames()
 {
   StdStringSet path_cell_names;
   for (Stage stage = stageFirst(); stage <= stageLast(); stage++) {
-    const TimingArc *arc = stageGateArc(stage);
+    TimingArc *arc = stageGateArc(stage);
     if (arc) {
       LibertyCell *cell = arc->set()->libertyCell();
       if (cell) {
@@ -642,62 +643,64 @@ WritePathSpice::stageLoadPathIndex(Stage stage)
   return stage * 2 - 1;
 }
 
-const Path *
+const PathRef *
 WritePathSpice::stageGateInputPath(Stage stage)
 {
   int path_index = stageGateInputPathIndex(stage);
   return path_expanded_.path(path_index);
 }
 
-const Path *
+const PathRef *
 WritePathSpice::stageDrvrPath(Stage stage)
 {
   int path_index = stageDrvrPathIndex(stage);
   return path_expanded_.path(path_index);
 }
 
-const Path *
+const PathRef *
 WritePathSpice::stageLoadPath(Stage stage)
 {
   int path_index = stageLoadPathIndex(stage);
   return path_expanded_.path(path_index);
 }
 
-const TimingArc *
+TimingArc *
 WritePathSpice::stageGateArc(Stage stage)
 {
   int path_index = stageDrvrPathIndex(stage);
   if (path_index >= 0)
-    return path_expanded_.path(path_index)->prevArc(this);
+    return path_expanded_.prevArc(path_index);
   else
     return nullptr;
 }
 
-const TimingArc *
+TimingArc *
 WritePathSpice::stageWireArc(Stage stage)
 {
   int path_index = stageLoadPathIndex(stage);
-  return path_expanded_.path(path_index)->prevArc(this);
+  return path_expanded_.prevArc(path_index);
 }
 
 Edge *
 WritePathSpice::stageGateEdge(Stage stage)
 {
-  const Path *path = stageDrvrPath(stage);
-  return path->prevEdge(this);
+  const PathRef *path = stageDrvrPath(stage);
+  TimingArc *arc = stageGateArc(stage);
+  return path->prevEdge(arc, this);
 }
 
 Edge *
 WritePathSpice::stageWireEdge(Stage stage)
 {
-  const Path *path = stageLoadPath(stage);
-  return path->prevEdge(this);
+  const PathRef *path = stageLoadPath(stage);
+  TimingArc *arc = stageWireArc(stage);
+  return path->prevEdge(arc, this);
 }
 
 Pin *
 WritePathSpice::stageGateInputPin(Stage stage)
 {
-  const Path *path = stageGateInputPath(stage);
+  const PathRef *path = stageGateInputPath(stage);
   return path->pin(this);
 }
 
@@ -711,7 +714,7 @@ WritePathSpice::stageGateInputPort(Stage stage)
 Pin *
 WritePathSpice::stageDrvrPin(Stage stage)
 {
-  const Path *path = stageDrvrPath(stage);
+  const PathRef *path = stageDrvrPath(stage);
   return path->pin(this);
 }
 
@@ -725,7 +728,7 @@ WritePathSpice::stageDrvrPort(Stage stage)
 Pin *
 WritePathSpice::stageLoadPin(Stage stage)
 {
-  const Path *path = stageLoadPath(stage);
+  const PathRef *path = stageLoadPath(stage);
   return path->pin(this);
 }
 

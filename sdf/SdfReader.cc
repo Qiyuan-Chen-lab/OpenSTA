@@ -45,7 +45,6 @@
 
 namespace sta {
 
-using std::string;
 using std::to_string;
 
 class SdfTriple
@@ -66,8 +65,8 @@ class SdfPortSpec
 {
 public:
   SdfPortSpec(const Transition *tr,
-	      const std::string *port,
-	      const std::string *cond);
+	      const string *port,
+	      const string *cond);
   ~SdfPortSpec();
   const string *port() const { return port_; }
   const Transition *transition() const { return tr_; }
@@ -431,7 +430,7 @@ SdfReader::findPort(const Cell *cell,
 }
 
 void
-SdfReader::timingCheck(const TimingRole *role,
+SdfReader::timingCheck(TimingRole *role,
                        SdfPortSpec *data_edge,
 		       SdfPortSpec *clk_edge,
                        SdfTriple *triple)
@@ -451,7 +450,7 @@ SdfReader::timingCheck(const TimingRole *role,
 }
 
 void
-SdfReader::timingCheck1(const TimingRole *role,
+SdfReader::timingCheck1(TimingRole *role,
                         Port *data_port,
 			SdfPortSpec *data_edge,
                         Port *clk_port,
@@ -499,7 +498,7 @@ SdfReader::timingCheck1(const TimingRole *role,
                 network_->cellName(instance_),
                 network_->name(data_port),
                 network_->name(clk_port),
-                role->to_string().c_str());
+                role->asString());
     }
   }
 }
@@ -510,7 +509,7 @@ SdfReader::annotateCheckEdges(Pin *data_pin,
 			      SdfPortSpec *data_edge,
 			      Pin *clk_pin,
 			      SdfPortSpec *clk_edge,
-			      const TimingRole *sdf_role,
+			      TimingRole *sdf_role,
 			      SdfTriple *triple,
 			      bool match_generic)
 {
@@ -601,8 +600,8 @@ SdfReader::timingCheckSetupHold1(SdfPortSpec *data_edge,
                                  SdfPortSpec *clk_edge,
                                  SdfTriple *setup_triple,
                                  SdfTriple *hold_triple,
-                                 const TimingRole *setup_role,
-                                 const TimingRole *hold_role)
+                                 TimingRole *setup_role,
+                                 TimingRole *hold_role)
 {
   const string *data_port_name = data_edge->port();
   const string *clk_port_name = clk_edge->port();
@@ -755,7 +754,7 @@ SdfReader::setEdgeArcDelaysCondUse(Edge *edge,
   float **values = triple->values();
   float *value_min = values[triple_min_index_];
   float *value_max = values[triple_max_index_];
-  const MinMax *min, *max;
+  MinMax *min, *max;
   if (cond_use_ == MinMaxAll::min()) {
     min = MinMax::min();
     max = MinMax::min();
@@ -827,7 +826,7 @@ SdfReader::condMatch(const string *sdf_cond,
 }
 
 SdfPortSpec *
-SdfReader::makePortSpec(const Transition *tr,
+SdfReader::makePortSpec(Transition *tr,
 			const string *port,
 			const string *cond)
 {

@@ -56,13 +56,13 @@ InternalPowerAttrs::deleteContents()
 }
 
 InternalPowerModel *
-InternalPowerAttrs::model(const RiseFall *rf) const
+InternalPowerAttrs::model(RiseFall *rf) const
 {
   return models_[rf->index()];
 }
 
 void
-InternalPowerAttrs::setModel(const RiseFall *rf,
+InternalPowerAttrs::setModel(RiseFall *rf,
 			     InternalPowerModel *model)
 {
   models_[rf->index()] = model;
@@ -86,9 +86,9 @@ InternalPower::InternalPower(LibertyCell *cell,
   when_(attrs->when()),
   related_pg_pin_(attrs->relatedPgPin())
 {
-  for (auto rf : RiseFall::range()) {
-    int rf_index = rf->index();
-    models_[rf_index] = attrs->model(rf);
+  for (auto tr : RiseFall::range()) {
+    int tr_index = tr->index();
+    models_[tr_index] = attrs->model(tr);
   }
   cell->addInternalPower(this);
 }
@@ -105,7 +105,7 @@ InternalPower::libertyCell() const
 }
 
 float
-InternalPower::power(const RiseFall *rf,
+InternalPower::power(RiseFall *rf,
 		     const Pvt *pvt,
 		     float in_slew,
 		     float load_cap)

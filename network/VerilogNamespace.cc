@@ -31,8 +31,6 @@
 
 namespace sta {
 
-using std::string;
-
 constexpr char verilog_escape = '\\';
 
 static string

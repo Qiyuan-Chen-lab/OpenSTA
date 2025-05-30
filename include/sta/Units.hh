@@ -28,6 +28,8 @@
 
 namespace sta {
 
+using std::string;
+
 class Unit
 {
 public:
@@ -60,8 +62,8 @@ private:
   void setScaledSuffix();
 
   float scale_;			// multiplier from user units to internal units
-  std::string suffix_;		// print suffix
-  std::string scaled_suffix_;
+  string suffix_;		// print suffix
+  string scaled_suffix_;
   int digits_;			// print digits (after decimal pt)
 };
 

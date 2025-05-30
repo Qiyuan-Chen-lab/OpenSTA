@@ -74,12 +74,12 @@ public:
   PathGroupIterator *iterator();
   // This does NOT delete the path ends.
   void clear();
-  static size_t group_path_count_max;
+  static int group_path_count_max;
   
 protected:
   PathGroup(const char *name,
-	    size_t group_path_count,
-	    size_t endpoint_path_count,
+	    int group_path_count,
+	    int endpoint_path_count,
 	    bool unique_pins,
 	    float min_slack,
 	    float max_slack,
@@ -91,8 +91,8 @@ protected:
   void sort();
 
   const char *name_;
-  size_t group_path_count_;
-  size_t endpoint_path_count_;
+  int group_path_count_;
+  int endpoint_path_count_;
   bool unique_pins_;
   float slack_min_;
   float slack_max_;

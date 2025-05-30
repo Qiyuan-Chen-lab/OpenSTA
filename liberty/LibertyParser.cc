@@ -36,8 +36,6 @@
 
 namespace sta {
 
-using std::string;
-
 void
 parseLibertyFile(const char *filename,
 		 LibertyGroupVisitor *library_visitor,
@@ -80,7 +78,7 @@ LibertyParser::makeDefine(LibertyAttrValueSeq *values,
     const char *value_type_name = (*values)[2]->stringValue();
     LibertyAttrType value_type = attrValueType(value_type_name);
     LibertyGroupType group_type = groupType(group_type_name);
-    define = new LibertyDefine(define_name, group_type,
+    define = new LibertyDefine(stringCopy(define_name), group_type,
 			       value_type, line);
     LibertyGroup *group = this->group();
     group->addDefine(define);
@@ -130,7 +128,6 @@ LibertyParser::groupBegin(const char *type,
                           int line)
 {
   LibertyGroup *group = new LibertyGroup(type, params, line);
-  stringDelete(type);
   group_visitor_->begin(group);
   group_stack_.push_back(group);
 }
@@ -171,7 +168,6 @@ LibertyParser::makeSimpleAttr(const char *name,
                               int line)
 {
   LibertyAttr *attr = new LibertySimpleAttr(name, value, line);
-  stringDelete(name);
   group_visitor_->visitAttr(attr);
   LibertyGroup *group = this->group();
   if (group && group_visitor_->save(attr)) {
@@ -202,7 +198,6 @@ LibertyParser::makeComplexAttr(const char *name,
   }
   else {
     LibertyAttr *attr = new LibertyComplexAttr(name, values, line);
-    stringDelete(name);
     group_visitor_->visitAttr(attr);
     if (group_visitor_->save(attr)) {
       LibertyGroup *group = this->group();
@@ -215,12 +210,11 @@ LibertyParser::makeComplexAttr(const char *name,
 }
 
 LibertyStmt *
-LibertyParser::makeVariable(const char *var,
+LibertyParser::makeVariable(char *var,
                             float value,
                             int line)
 {
   LibertyVariable *variable = new LibertyVariable(var, value, line);
-  stringDelete(var);
   group_visitor_->visitVariable(variable);
   if (group_visitor_->save(variable))
     return variable;
@@ -233,9 +227,7 @@ LibertyParser::makeVariable(const char *var,
 LibertyAttrValue *
 LibertyParser::makeStringAttrValue(char *value)
 {
-  LibertyAttrValue *attr = new LibertyStringAttrValue(value);
-  stringDelete(value);
-  return attr;
+  return new LibertyStringAttrValue(value);
 }
 
 LibertyAttrValue *
@@ -298,6 +290,7 @@ LibertyGroup::addAttribute(LibertyAttr *attr)
 
 LibertyGroup::~LibertyGroup()
 {
+  stringDelete(type_);
   if (params_) {
     params_->deleteContents();
     delete params_;
@@ -377,6 +370,11 @@ LibertyAttr::LibertyAttr(const char *name,
 {
 }
 
+LibertyAttr::~LibertyAttr()
+{
+  stringDelete(name_);
+}
+
 LibertySimpleAttr::LibertySimpleAttr(const char *name,
 				     LibertyAttrValue *value,
 				     int line) :
@@ -428,6 +426,11 @@ LibertyStringAttrValue::LibertyStringAttrValue(const char *value) :
 {
 }
 
+LibertyStringAttrValue::~LibertyStringAttrValue()
+{
+  stringDelete(value_);
+}
+
 float
 LibertyStringAttrValue::floatValue()
 {
@@ -438,7 +441,7 @@ LibertyStringAttrValue::floatValue()
 const char *
 LibertyStringAttrValue::stringValue()
 {
-  return value_.c_str();
+  return value_;
 }
 
 LibertyFloatAttrValue::LibertyFloatAttrValue(float value) :
@@ -472,6 +475,11 @@ LibertyDefine::LibertyDefine(const char *name,
 {
 }
 
+LibertyDefine::~LibertyDefine()
+{
+  stringDelete(name_);
+}
+
 ////////////////////////////////////////////////////////////////
 
 LibertyVariable::LibertyVariable(const char *var,
@@ -481,6 +489,11 @@ LibertyVariable::LibertyVariable(const char *var,
   var_(var),
   value_(value)
 {
+}
+
+LibertyVariable::~LibertyVariable()
+{
+  stringDelete(var_);
 }
 
 ////////////////////////////////////////////////////////////////

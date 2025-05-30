@@ -1,4 +1,4 @@
-// opensta, Static Timing Analyzer
+// OpenSTA, Static Timing Analyzer
 // Copyright (c) 2025, Parallax Software, Inc.
 // 
 // This program is free software: you can redistribute it and/or modify
@@ -39,7 +39,6 @@
 #include "SearchClass.hh"
 #include "SearchPred.hh"
 #include "VertexVisitor.hh"
-#include "Path.hh"
 
 namespace sta {
 
@@ -70,7 +69,7 @@ typedef UnorderedSet<TagGroup*, TagGroupHash, TagGroupEqual> TagGroupSet;
 typedef Map<Vertex*, Slack> VertexSlackMap;
 typedef Vector<VertexSlackMap> VertexSlackMapSeq;
 typedef Vector<WorstSlacks> WorstSlacksSeq;
-typedef std::vector<DelayDbl> DelayDblSeq;
+typedef vector<DelayDbl> DelayDblSeq;
 
 class Search : public StaState
 {
@@ -100,8 +99,8 @@ public:
                           bool unconstrained,
                           const Corner *corner,
                           const MinMaxAll *min_max,
-                          size_t group_path_count,
-                          size_t endpoint_path_count,
+                          int group_path_count,
+                          int endpoint_path_count,
                           bool unique_pins,
                           float slack_min,
                           float slack_max,
@@ -127,7 +126,6 @@ public:
   void requiredInvalid(const Pin *pin);
   // Vertex will be deleted.
   void deleteVertexBefore(Vertex *vertex);
-  void deleteEdgeBefore(Edge *edge);
   // Find all arrival times (propatating thru latches).
   void findAllArrivals();
   // Find all arrivals (without latch propagation).
@@ -228,7 +226,7 @@ public:
   TagIndex tagCount() const;
   TagGroupIndex tagGroupCount() const;
   void reportTagGroups() const;
-  void reportPathCountHistogram() const;
+  void reportArrivalCountHistogram() const;
   virtual int clkInfoCount() const;
   virtual bool isEndpoint(Vertex *vertex) const;
   virtual bool isEndpoint(Vertex *vertex,
@@ -254,28 +252,22 @@ public:
                const RiseFall *to_rf,
                const MinMax *min_max,
                const PathAnalysisPt *path_ap);
-  Tag *thruClkTag(Path *from_path,
-                  Vertex *from_vertex,
+  Tag *thruClkTag(PathVertex *from_path,
                   Tag *from_tag,
                   bool to_propagates_clk,
                   Edge *edge,
                   const RiseFall *to_rf,
-                  bool arc_delay_min_max_eq,
                   const MinMax *min_max,
                   const PathAnalysisPt *path_ap);
-  ClkInfo *thruClkInfo(Path *from_path,
-                       Vertex *from_vertex,
+  ClkInfo *thruClkInfo(PathVertex *from_path,
                        ClkInfo *from_clk_info,
-                       bool from_is_clk,
                        Edge *edge,
                        Vertex *to_vertex,
                        const Pin *to_pin,
-                       bool to_is_clk,
-                       bool arc_delay_min_max_eq,
                        const MinMax *min_max,
                        const PathAnalysisPt *path_ap);
   ClkInfo *clkInfoWithCrprClkPath(ClkInfo *from_clk_info,
-				  Path *from_path,
+				  PathVertex *from_path,
 				  const PathAnalysisPt *path_ap);
   void seedClkArrivals(const Pin *pin,
 		       Vertex *vertex,
@@ -341,7 +333,7 @@ public:
 			       float latency,
 			       ClockUncertainties *uncertainties,
 			       const PathAnalysisPt *path_ap,
-			       Path *crpr_clk_path);
+			       PathVertex *crpr_clk_path);
   ClkInfo *findClkInfo(const ClockEdge *clk_edge,
 		       const Pin *clk_src,
 		       bool is_propagated,
@@ -359,7 +351,6 @@ public:
   void reportArrivals(Vertex *vertex) const;
   Slack wnsSlack(Vertex *vertex,
 		 PathAPIndex path_ap_index);
-  void levelsChangedBefore();
   void levelChangedBefore(Vertex *vertex);
   void seedInputArrival(const Pin *pin,
  			Vertex *vertex,
@@ -381,33 +372,7 @@ public:
                             bool unconstrained,
                             bool thru_latches);
   VertexSeq filteredEndpoints();
-
-  Arrival *arrivals(const Vertex *vertex) const;
-  Arrival *makeArrivals(const Vertex *vertex,
-			uint32_t count);
-  void deleteArrivals(const Vertex *vertex);
-  Required *requireds(const Vertex *vertex) const;
-  bool hasRequireds(const Vertex *vertex) const;
-  Required *makeRequireds(const Vertex *vertex,
-                          uint32_t count);
-  void deleteRequireds(const Vertex *vertex);
-  size_t arrivalCount() const;
-  size_t requiredCount() const;
-  Path *prevPaths(const Vertex *vertex) const;
-  Path *makePrevPaths(const Vertex *vertex,
-                      uint32_t count);
-  void deletePrevPaths(Vertex *vertex);
-  bool crprPathPruningDisabled(const Vertex *vertex) const;
-  void setCrprPathPruningDisabled(const Vertex *vertex,
-                                  bool disabled);
-  bool bfsInQueue(const Vertex *vertex,
-                  BfsIndex index) const;
-  void setBfsInQueue(const Vertex *vertex,
-                     BfsIndex index,
-                     bool value);
-  TagGroupIndex tagGroupIndex(const Vertex *vertex) const;
-  void setTagGroupIndex(const Vertex *vertex,
-                        TagGroupIndex tag_index);
+  bool alwaysSavePrevPaths() const { return always_save_prev_paths_; }
 
 protected:
   void init(StaState *sta);
@@ -573,8 +538,7 @@ protected:
   void tnsNotifyBefore(Vertex *vertex);
   bool matchesFilterTo(Path *path,
 		       const ClockEdge *to_clk_edge) const;
-  const Path *pathClkPathArrival1(const Path *path) const;
-  void deletePathsState(const Vertex *vertex) const;
+  PathRef pathClkPathArrival1(const Path *path) const;
   void clocks(const Vertex *vertex,
               // Return value.
               ClockSet &clks) const;
@@ -630,14 +594,14 @@ protected:
   // Entries in tags_ may be missing where previous filter tags were deleted.
   TagIndex tag_capacity_;
   std::atomic<Tag **> tags_;
-  std::vector<Tag **> tags_prev_;
+  vector<Tag **> tags_prev_;
   TagIndex tag_next_;
   // Holes in tags_ left by deleting filter tags.
   std::vector<TagIndex> tag_free_indices_;
   std::mutex tag_lock_;
   TagGroupSet *tag_group_set_;
   std::atomic<TagGroup **> tag_groups_;
-  std::vector<TagGroup **> tag_groups_prev_;
+  vector<TagGroup **> tag_groups_prev_;
   TagGroupIndex tag_group_next_;
   // Holes in tag_groups_ left by deleting filter tag groups.
   std::vector<TagIndex> tag_group_free_indices_;
@@ -649,6 +613,7 @@ protected:
   std::mutex pending_latch_outputs_lock_;
   VertexSet *endpoints_;
   VertexSet *invalid_endpoints_;
+  bool always_save_prev_paths_;
   // Filter exception to tag arrivals for
   // report_timing -from pin|inst -through.
   // -to is always nullptr.
@@ -711,7 +676,7 @@ protected:
   bool visitArc(const Pin *from_pin,
 		Vertex *from_vertex,
 		const RiseFall *from_rf,
-		Path *from_path,
+		PathVertex *from_path,
 		Edge *edge,
 		TimingArc *arc,
 		const Pin *to_pin,
@@ -723,7 +688,7 @@ protected:
   virtual bool visitFromPath(const Pin *from_pin,
 			     Vertex *from_vertex,
 			     const RiseFall *from_rf,
-			     Path *from_path,
+			     PathVertex *from_path,
 			     Edge *edge,
 			     TimingArc *arc,
 			     const Pin *to_pin,
@@ -736,7 +701,7 @@ protected:
 			       Vertex *from_vertex,
 			       const RiseFall *from_rf,
 			       Tag *from_tag,
-			       Path *from_path,
+			       PathVertex *from_path,
                                const Arrival &from_arrival,
 			       Edge *edge,
 			       TimingArc *arc,
@@ -769,7 +734,7 @@ public:
 			       Vertex *from_vertex,
 			       const RiseFall *from_rf,
 			       Tag *from_tag,
-			       Path *from_path,
+			       PathVertex *from_path,
                                const Arrival &from_arrival,
                                Edge *edge,
 			       TimingArc *arc,
@@ -810,14 +775,14 @@ public:
   RequiredCmp();
   void requiredsInit(Vertex *vertex,
 		     const StaState *sta);
-  void requiredSet(size_t path_index,
-		   Required &required,
+  void requiredSet(int arrival_index,
+		   Required required,
 		   const MinMax *min_max,
 		   const StaState *sta);
   // Return true if the requireds changed.
   bool requiredsSave(Vertex *vertex,
 		     const StaState *sta);
-  Required required(size_t path_index);
+  Required required(int arrival_index);
 
 protected:
   ArrivalSeq requireds_;
@@ -840,7 +805,7 @@ protected:
 			       Vertex *from_vertex,
 			       const RiseFall *from_rf,
 			       Tag *from_tag,
-			       Path *from_path,
+			       PathVertex *from_path,
                                const Arrival &from_arrival,
 			       Edge *edge,
 			       TimingArc *arc,
@@ -862,11 +827,11 @@ protected:
 class DynLoopSrchPred
 {
 public:
-  DynLoopSrchPred(TagGroupBldr *tag_bldr);
+  explicit DynLoopSrchPred(TagGroupBldr *tag_bldr);
 
 protected:
   bool loopEnabled(Edge *edge,
-                   bool dynamic_loop_breaking_enabled,
+		   const Sdc *sdc,
 		   const Graph *graph,
 		   Search *search);
   bool hasPendingLoopPaths(Edge *edge,

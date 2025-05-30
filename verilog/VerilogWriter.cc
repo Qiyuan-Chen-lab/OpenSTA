@@ -39,7 +39,6 @@ namespace sta {
 
 using std::min;
 using std::max;
-using std::string;
 
 class VerilogWriter
 {
@@ -180,7 +179,7 @@ void
 VerilogWriter::writeModule(const Instance *inst)
 {
   Cell *cell = network_->cell(inst);
-  std::string cell_vname = cellVerilogName(network_->name(cell));
+  string cell_vname = cellVerilogName(network_->name(cell));
   fprintf(stream_, "module %s (", cell_vname.c_str());
   writePorts(cell);
   writePortDcls(cell);
@@ -203,7 +202,7 @@ VerilogWriter::writePorts(const Cell *cell)
         || !network_->direction(port)->isPowerGround()) {
       if (!first)
         fprintf(stream_, ",\n    ");
-      std::string verilog_name = portVerilogName(network_->name(port));
+      string verilog_name = portVerilogName(network_->name(port));
       fprintf(stream_, "%s", verilog_name.c_str());
       first = false;
     }
@@ -221,7 +220,7 @@ VerilogWriter::writePortDcls(const Cell *cell)
     PortDirection *dir = network_->direction(port);
     if (include_pwr_gnd_
         || !network_->direction(port)->isPowerGround()) {
-      std::string port_vname = portVerilogName(network_->name(port));
+      string port_vname = portVerilogName(network_->name(port));
       const char *vtype = verilogPortDir(dir);
       if (vtype) {
         fprintf(stream_, " %s", vtype);
@@ -275,7 +274,7 @@ VerilogWriter::writeWireDcls(const Instance *inst)
 {
   Cell *cell = network_->cell(inst);
   char escape = network_->pathEscape();
-  Map<std::string, BusIndexRange, std::less<std::string>> bus_ranges;
+  Map<string, BusIndexRange, std::less<string>> bus_ranges;
   NetIterator *net_iter = network_->netIterator(inst);
   while (net_iter->hasNext()) {
     Net *net = net_iter->next();
@@ -285,7 +284,7 @@ VerilogWriter::writeWireDcls(const Instance *inst)
       if (network_->findPort(cell, net_name) == nullptr) {
         if (isBusName(net_name, '[', ']', escape)) {
           bool is_bus;
-          std::string bus_name;
+          string bus_name;
           int index;
           parseBusName(net_name, '[', ']', escape, is_bus, bus_name, index);
           BusIndexRange &range = bus_ranges[bus_name];
@@ -293,7 +292,7 @@ VerilogWriter::writeWireDcls(const Instance *inst)
           range.second = min(range.second, index);
         }
         else {
-          std::string net_vname = netVerilogName(net_name);
+          string net_vname = netVerilogName(net_name);
           fprintf(stream_, " wire %s;\n", net_vname.c_str());;
         }
       }
@@ -303,7 +302,7 @@ VerilogWriter::writeWireDcls(const Instance *inst)
 
   for (const auto& [bus_name1, range] : bus_ranges) {
     const char *bus_name = bus_name1.c_str();
-    std::string net_vname = netVerilogName(bus_name);
+    string net_vname = netVerilogName(bus_name);
     fprintf(stream_, " wire [%d:%d] %s;\n",
             range.first,
             range.second,

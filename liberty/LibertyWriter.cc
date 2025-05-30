@@ -358,18 +358,16 @@ LibertyWriter::writePortAttrs(const LibertyPort *port)
       // cannot ref internal ports until sequentials are written
       && !(func->port()
            && func->port()->direction()->isInternal()))
-    fprintf(stream_, "      function : \"%s\";\n", func->to_string().c_str());
+    fprintf(stream_, "      function : \"%s\";\n", func->asString());
   auto tristate_enable = port->tristateEnable();
   if (tristate_enable) {
     if (tristate_enable->op() == FuncExpr::op_not) {
       FuncExpr *three_state = tristate_enable->left();
-      fprintf(stream_, "      three_state : \"%s\";\n",
-              three_state->to_string().c_str());
+      fprintf(stream_, "      three_state : \"%s\";\n", three_state->asString());
     }
     else {
       FuncExpr three_state(FuncExpr::op_not, tristate_enable, nullptr, nullptr);
-      fprintf(stream_, "      three_state : \"%s\";\n",
-              three_state.to_string().c_str());
+      fprintf(stream_, "      three_state : \"%s\";\n", three_state.asString());
     }
   }
   if (port->isClock())
@@ -419,12 +417,12 @@ LibertyWriter::writeTimingArcSet(const TimingArcSet *arc_set)
   if (sense != TimingSense::unknown
       && sense != TimingSense::non_unate)
     fprintf(stream_, "        timing_sense : %s;\n",
-            to_string(sense));
+            timingSenseString(sense));
   const char *timing_type = timingTypeString(arc_set);
   if (timing_type)
     fprintf(stream_, "        timing_type : %s;\n", timing_type);
 
-  for (const RiseFall *rf : RiseFall::range()) {
+  for (RiseFall *rf : RiseFall::range()) {
     TimingArc *arc = arc_set->arcTo(rf);
     if (arc)
       writeTimingModels(arc, rf);
@@ -636,7 +634,7 @@ LibertyWriter::timingTypeString(const TimingArcSet *arc_set)
                    library_->name(),
                    arc_set->to()->libertyCell()->name(),
                    arc_set->to()->name(),
-                   role->to_string().c_str());
+                   role->asString());
     return nullptr;
   }
 }

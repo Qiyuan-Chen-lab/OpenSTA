@@ -39,10 +39,13 @@
 
 namespace sta {
 
+using std::string;
+using std::ofstream;
+
 typedef std::map<const ParasiticNode*, int> ParasiticNodeMap;
-typedef Map<std::string, StringVector> CellSpicePortNames;
+typedef Map<string, StringVector> CellSpicePortNames;
 typedef Map<const LibertyPort*, LogicValue> LibertyPortLogicValues;
-typedef std::vector<std::string> StdStringSeq;
+typedef std::vector<string> StdStringSeq;
 
 // Utilities for writing a spice deck.
 class WriteSpice : public StaState
@@ -60,7 +63,7 @@ public:
 
 protected:
   void initPowerGnd();
-  void writeHeader(std::string &title,
+  void writeHeader(string &title,
                    float max_time,
                    float time_step);
   void writePrintStmt(StdStringSeq &node_names);
@@ -125,15 +128,15 @@ protected:
                              const RiseFall *from_rf,
                              const Pin *to_pin,
                              const RiseFall *to_rf,
-                             std::string prefix);
+                             string prefix);
   void writeMeasureSlewStmt(const Pin *pin,
                             const RiseFall *rf,
-                            std::string prefix);
+                            string prefix);
   const char *spiceTrans(const RiseFall *rf);
   float findSlew(Vertex *vertex,
 		 const RiseFall *rf,
-		 const TimingArc *next_arc);
-  float slewAxisMinValue(const TimingArc *arc);
+		 TimingArc *next_arc);
+  float slewAxisMinValue(TimingArc *arc);
   float clkWaveformTimeOffset(const Clock *clk);
 
   void gatePortValues(const Pin *input_pin,
@@ -161,8 +164,8 @@ protected:
                             InstanceSet &written_insts);
   PinSeq drvrLoads(const Pin *drvr_pin);
   void writeSubcktInstVoltSrcs();
-  std::string replaceFileExt(std::string filename,
-                             const char *ext);
+  string replaceFileExt(string filename,
+                        const char *ext);
 
   const char *spice_filename_;
   const char *subckt_filename_;
@@ -173,7 +176,7 @@ protected:
   CircuitSim ckt_sim_;
   const DcalcAnalysisPt *dcalc_ap_;
 
-  std::ofstream spice_stream_;
+  ofstream spice_stream_;
   LibertyLibrary *default_library_;
   float power_voltage_;
   float gnd_voltage_;
@@ -190,7 +193,7 @@ protected:
 };
 
 void
-streamPrint(std::ofstream &stream,
+streamPrint(ofstream &stream,
 	    const char *fmt,
 	    ...) __attribute__((format (printf, 2, 3)));
 

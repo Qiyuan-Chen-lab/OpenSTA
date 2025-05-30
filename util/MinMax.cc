@@ -49,9 +49,9 @@ compareMax(float value1,
 
 ////////////////////////////////////////////////////////////////
 
-const MinMax MinMax::min_("min", 0,  INF, std::numeric_limits<int>::max(), compareMin);
-const MinMax MinMax::max_("max", 1, -INF, std::numeric_limits<int>::min(), compareMax);
-const std::array<const MinMax*, 2> MinMax::range_{&min_, &max_};
+MinMax MinMax::min_("min", 0,  INF, std::numeric_limits<int>::max(), compareMin);
+MinMax MinMax::max_("max", 1, -INF, std::numeric_limits<int>::min(), compareMax);
+const std::array<MinMax*, 2> MinMax::range_{&min_, &max_};
 const std::array<int, 2> MinMax::range_index_{min_.index(), max_.index()};
 
 MinMax::MinMax(const char *name,
@@ -67,7 +67,7 @@ MinMax::MinMax(const char *name,
 {
 }
 
-const MinMaxAll *
+MinMaxAll *
 MinMax::asMinMaxAll() const
 {
   if (this == &min_)
@@ -76,7 +76,7 @@ MinMax::asMinMaxAll() const
     return MinMaxAll::max();
 }
 
-const MinMax *
+MinMax *
 MinMax::opposite() const
 {
   if (this == &max_)
@@ -85,7 +85,7 @@ MinMax::opposite() const
     return &max_;
 }
 
-const MinMax *
+MinMax *
 MinMax::find(const char *min_max)
 {
   if (stringEq(min_max, "min")
@@ -98,7 +98,7 @@ MinMax::find(const char *min_max)
     return nullptr;
 }
 
-const MinMax *
+MinMax *
 MinMax::find(int index)
 {
   if (index == min_.index())
@@ -128,14 +128,14 @@ MinMax::minMax(float value1,
 
 ////////////////////////////////////////////////////////////////
 
-const MinMaxAll MinMaxAll::min_("min", 0, {MinMax::min()}, {MinMax::min()->index()});
-const MinMaxAll MinMaxAll::max_("max", 1, {MinMax::max()}, {MinMax::max()->index()});
-const MinMaxAll MinMaxAll::all_("all", 2, {MinMax::min(), MinMax::max()},
+MinMaxAll MinMaxAll::min_("min", 0, {MinMax::min()}, {MinMax::min()->index()});
+MinMaxAll MinMaxAll::max_("max", 1, {MinMax::max()}, {MinMax::max()->index()});
+MinMaxAll MinMaxAll::all_("all", 2, {MinMax::min(), MinMax::max()},
 			  {MinMax::min()->index(), MinMax::max()->index()});
 
 MinMaxAll::MinMaxAll(const char *name,
 		     int index,
-		     std::vector<const MinMax*> range,
+		     std::vector<MinMax*> range,
 		     std::vector<int> range_index) :
   name_(name),
   index_(index),
@@ -144,7 +144,7 @@ MinMaxAll::MinMaxAll(const char *name,
 {
 }
 
-const MinMax *
+MinMax *
 MinMaxAll::asMinMax() const
 {
   if (this == &min_)
@@ -165,7 +165,7 @@ MinMaxAll::matches(const MinMaxAll *min_max) const
   return this == &all_ || this == min_max;
 }
 
-const MinMaxAll *
+MinMaxAll *
 MinMaxAll::find(const char *min_max)
 {
   if (stringEq(min_max, "min")

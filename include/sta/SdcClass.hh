@@ -122,6 +122,8 @@ public:
 class ExceptionPath;
 typedef Set<ExceptionState*, ExceptionStateLess> ExceptionStateSet;
 
+enum class CrprMode { same_pin, same_transition };
+
 // Constraint applies to clock or data paths.
 enum class PathClkOrData { clk, data };
 
