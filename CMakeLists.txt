@@ -31,7 +31,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.14)
 # Allows SWIG_MODULE_NAME to be set
 cmake_policy(SET CMP0086 NEW)
 endif()
-set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/home/24qyc/.local")
+# set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/home/24qyc/.local")
 project(STA VERSION 2.6.0
   LANGUAGES CXX
 )
