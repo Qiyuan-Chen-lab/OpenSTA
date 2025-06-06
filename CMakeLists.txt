@@ -581,6 +581,8 @@ message(STATUS "STA executable: ${STA_HOME}/app/sta")
 install(TARGETS sta DESTINATION bin)
 
 # library
+set_target_properties(sta_swig PROPERTIES PREFIX "lib")
+install (TARGETS sta_swig DESTINATION lib)
 install(TARGETS OpenSTA DESTINATION lib)
 
 # include
