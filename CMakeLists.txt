@@ -578,6 +578,8 @@ install(TARGETS sta DESTINATION bin)
 
 # library
 install(TARGETS OpenSTA DESTINATION lib)
+set_target_properties(sta_swig PROPERTIES PREFIX "lib")
+install (TARGETS sta_swig DESTINATION lib)
 
 # include
 install(DIRECTORY include/sta  DESTINATION include)
